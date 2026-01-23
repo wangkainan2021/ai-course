@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片播放 - AI学习课程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', 'SimHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* 图片播放区域 */
+        .gallery-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+        }
+
+        .image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+            animation: fadeIn 0.5s ease-in-out;
+            background: #f0f0f0;
+        }
+
+        .gallery-image.active {
+            display: block;
+        }
+
+        .image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f0f0f0;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .image-placeholder .placeholder-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* 导航按钮 */
+        .nav-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 10;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .nav-button:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+
+        .nav-button.prev {
+            left: 20px;
+        }
+
+        .nav-button.next {
+            right: 20px;
+        }
+
+        .nav-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 图片指示器 */
+        .indicators {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ddd;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .indicator.active {
+            background: #667eea;
+            transform: scale(1.2);
+        }
+
+        .indicator:hover {
+            background: #764ba2;
+        }
+
+        /* 文本区域 */
+        .text-area {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            min-height: 100px;
+        }
+
+        .text-area h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .text-content {
+            color: #555;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        /* 返回按钮 */
+        .header-nav {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .header-nav a {
+            display: inline-block;
+            padding: 10px 25px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-size: 16px;
+            transition: all 0.3s;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .header-nav a:hover,
+        .header-nav a.active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .back-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-button a {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .back-button a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .gallery-container {
+                aspect-ratio: 4 / 3;
+            }
+
+            .nav-button {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+            }
+
+            .nav-button.prev {
+                left: 10px;
+            }
+
+            .nav-button.next {
+                right: 10px;
+            }
+
+            .text-area {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ 图片播放</h1>
+            <p>点击左右按钮切换图片</p>
+            <div class="header-nav" style="margin-top: 20px;">
+                <a href="gallery.html" style="background: rgba(255, 255, 255, 0.3);">1. 图片播放</a>
+                <a href="index.html#video" style="color: white; text-decoration: none; padding: 10px 25px; background: rgba(255, 255, 255, 0.2); border-radius: 25px; border: 2px solid rgba(255, 255, 255, 0.3); transition: all 0.3s;">2. 观看影片</a>
+                <a href="index.html#interactive" style="color: white; text-decoration: none; padding: 10px 25px; background: rgba(255, 255, 255, 0.2); border-radius: 25px; border: 2px solid rgba(255, 255, 255, 0.3); transition: all 0.3s;">3. 互动关卡</a>
+                <a href="index.html#summary" style="color: white; text-decoration: none; padding: 10px 25px; background: rgba(255, 255, 255, 0.2); border-radius: 25px; border: 2px solid rgba(255, 255, 255, 0.3); transition: all 0.3s;">4. 课程小结</a>
+            </div>
+        </div>
+
+        <!-- 图片播放区域 -->
+        <div class="gallery-container">
+            <div class="image-wrapper">
+                <!-- 图片1 -->
+                <img src="images/image1.jpg" alt="图片1" class="gallery-image active" id="image1" onerror="this.setAttribute('data-error', 'true'); this.style.display='none'; showImage(currentIndex);">
+                <!-- 图片2 -->
+                <img src="images/image2.jpg" alt="图片2" class="gallery-image" id="image2" onerror="this.setAttribute('data-error', 'true'); this.style.display='none';">
+                <!-- 图片3 -->
+                <img src="images/image3.jpg" alt="图片3" class="gallery-image" id="image3" onerror="this.setAttribute('data-error', 'true'); this.style.display='none';">
+                <!-- 图片4 -->
+                <img src="images/image4.jpg" alt="图片4" class="gallery-image" id="image4" onerror="this.setAttribute('data-error', 'true'); this.style.display='none';">
+                <!-- 图片5 -->
+                <img src="images/image5.jpg" alt="图片5" class="gallery-image" id="image5" onerror="this.setAttribute('data-error', 'true'); this.style.display='none';">
+                
+                <!-- 占位符 -->
+                <div class="image-placeholder" id="placeholder" style="display: none;">
+                    <div class="placeholder-icon">🖼️</div>
+                    <p>图片加载中...</p>
+                    <p style="font-size: 14px; margin-top: 10px;">请将图片放入 images 文件夹</p>
+                    <p style="font-size: 12px; margin-top: 5px; opacity: 0.7;">命名为: image1.jpg, image2.jpg, image3.jpg, image4.jpg, image5.jpg</p>
+                </div>
+            </div>
+
+            <!-- 导航按钮 -->
+            <button class="nav-button prev" id="prevButton" onclick="previousImage()">‹</button>
+            <button class="nav-button next" id="nextButton" onclick="nextImage()">›</button>
+        </div>
+
+        <!-- 图片指示器 -->
+        <div class="indicators" id="indicators">
+            <div class="indicator active" onclick="goToImage(0)"></div>
+            <div class="indicator" onclick="goToImage(1)"></div>
+            <div class="indicator" onclick="goToImage(2)"></div>
+            <div class="indicator" onclick="goToImage(3)"></div>
+            <div class="indicator" onclick="goToImage(4)"></div>
+        </div>
+
+        <!-- 文本区域 -->
+        <div class="text-area">
+            <h3>图片说明</h3>
+            <div class="text-content" id="textContent">
+                这是第一张图片的说明文字。你可以在这里添加每张图片的详细描述。
+            </div>
+        </div>
+
+        <!-- 返回按钮 -->
+        <div class="back-button">
+            <a href="index.html">返回主页</a>
+        </div>
+    </div>
+
+    <script>
+        let currentIndex = 0;
+        const totalImages = 5;
+        const images = document.querySelectorAll('.gallery-image');
+        const indicators = document.querySelectorAll('.indicator');
+        const textContent = document.getElementById('textContent');
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+
+        // 图片说明文字（可以根据实际图片内容修改）
+        const imageTexts = [
+            "这是第一张图片的说明文字。你可以在这里添加每张图片的详细描述。",
+            "这是第二张图片的说明文字。描述图片的内容和意义。",
+            "这是第三张图片的说明文字。分享图片背后的故事。",
+            "这是第四张图片的说明文字。解释图片的重要信息。",
+            "这是第五张图片的说明文字。总结图片的关键点。"
+        ];
+
+        // 显示指定索引的图片
+        function showImage(index) {
+            // 隐藏所有图片
+            images.forEach(img => {
+                img.classList.remove('active');
+            });
+            
+            const placeholder = document.getElementById('placeholder');
+            const currentImage = images[index];
+            
+            // 检查图片是否加载成功
+            if (currentImage && !currentImage.hasAttribute('data-error')) {
+                // 尝试检查图片是否真的加载了
+                if (currentImage.complete && currentImage.naturalWidth > 0) {
+                    // 图片加载成功
+                    currentImage.classList.add('active');
+                    if (placeholder) placeholder.style.display = 'none';
+                } else {
+                    // 图片可能还在加载，等待加载完成
+                    currentImage.onload = function() {
+                        this.classList.add('active');
+                        if (placeholder) placeholder.style.display = 'none';
+                    };
+                    currentImage.onerror = function() {
+                        this.setAttribute('data-error', 'true');
+                        this.style.display = 'none';
+                        if (placeholder) placeholder.style.display = 'flex';
+                    };
+                    // 如果图片加载失败，显示占位符
+                    if (placeholder) placeholder.style.display = 'flex';
+                }
+            } else {
+                // 图片加载失败，显示占位符
+                if (placeholder) placeholder.style.display = 'flex';
+            }
+
+            // 更新指示器
+            indicators.forEach((indicator, i) => {
+                if (i === index) {
+                    indicator.classList.add('active');
+                } else {
+                    indicator.classList.remove('active');
+                }
+            });
+
+            // 更新文本内容
+            textContent.textContent = imageTexts[index];
+
+            // 更新按钮状态
+            prevButton.disabled = (index === 0);
+            nextButton.disabled = (index === totalImages - 1);
+        }
+
+        // 上一张图片
+        function previousImage() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                showImage(currentIndex);
+            }
+        }
+
+        // 下一张图片
+        function nextImage() {
+            if (currentIndex < totalImages - 1) {
+                currentIndex++;
+                showImage(currentIndex);
+            }
+        }
+
+        // 跳转到指定图片
+        function goToImage(index) {
+            currentIndex = index;
+            showImage(currentIndex);
+        }
+
+        // 键盘快捷键支持
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowLeft') {
+                previousImage();
+            } else if (event.key === 'ArrowRight') {
+                nextImage();
+            }
+        });
+
+        // 初始化
+        window.addEventListener('load', function() {
+            showImage(0);
+        });
+    </script>
+</body>
+</html>
