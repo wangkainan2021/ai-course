@@ -295,6 +295,12 @@
 
         // 初始化
         async function init() {
+            // 清除"加载中"提示
+            const contentArea = document.getElementById('contentArea');
+            if (contentArea && contentArea.innerHTML.includes('加载中')) {
+                contentArea.innerHTML = '';
+            }
+            
             try {
                 // 获取课程列表（这里简化处理，使用第一个课程）
                 const coursesRes = await fetch(`${API_BASE_URL}/courses`);
@@ -664,11 +670,13 @@
                     return `http://localhost:3000${imgPath}`;
                 } else {
                     // Vercel环境：通过API提供文件
-                    // 将 /uploads/... 转换为 /api/uploads/...
+                    // 将 /uploads/images/xxx.png 转换为 /api/uploads/images/xxx.png
                     if (imgPath.startsWith('/uploads/')) {
-                        return `${API_BASE_URL}${imgPath.replace('/uploads', '/uploads')}`;
+                        return `${API_BASE_URL}${imgPath}`;
                     }
-                    return `${API_BASE_URL.replace('/api', '')}${imgPath}`;
+                    // 如果路径不包含 /uploads/，添加它
+                    const cleanPath = imgPath.startsWith('/') ? imgPath : '/' + imgPath;
+                    return `${API_BASE_URL}/uploads/images${cleanPath}`;
                 }
             };
             
@@ -719,11 +727,13 @@
                     return `http://localhost:3000${videoPath}`;
                 } else {
                     // Vercel环境：通过API提供文件
-                    // 将 /uploads/... 转换为 /api/uploads/...
+                    // 将 /uploads/videos/xxx.mp4 转换为 /api/uploads/videos/xxx.mp4
                     if (videoPath.startsWith('/uploads/')) {
-                        return `${API_BASE_URL}${videoPath.replace('/uploads', '/uploads')}`;
+                        return `${API_BASE_URL}${videoPath}`;
                     }
-                    return `${API_BASE_URL.replace('/api', '')}${videoPath}`;
+                    // 如果路径不包含 /uploads/，添加它
+                    const cleanPath = videoPath.startsWith('/') ? videoPath : '/' + videoPath;
+                    return `${API_BASE_URL}/uploads/videos${cleanPath}`;
                 }
             };
             
@@ -782,12 +792,20 @@
                 try {
                     // 构建代码文件URL
                     let codeUrl = level.codeUrl;
-                    if (codeUrl.startsWith('/uploads/')) {
+                    if (codeUrl.startsWith('http://') || codeUrl.startsWith('https://')) {
+                        // 已经是完整URL，直接使用
+                    } else if (codeUrl.startsWith('/uploads/')) {
                         // Vercel环境：通过API提供文件
-                        codeUrl = `${API_BASE_URL}${codeUrl.replace('/uploads', '/uploads')}`;
-                    } else if (!codeUrl.startsWith('http://') && !codeUrl.startsWith('https://')) {
+                        codeUrl = `${API_BASE_URL}${codeUrl}`;
+                    } else {
                         // 相对路径
-                        codeUrl = isLocal ? `http://localhost:3000${codeUrl}` : `${API_BASE_URL.replace('/api', '')}${codeUrl}`;
+                        if (isLocal) {
+                            codeUrl = `http://localhost:3000${codeUrl.startsWith('/') ? codeUrl : '/' + codeUrl}`;
+                        } else {
+                            // Vercel环境：假设是 /uploads/canvas/xxx.js 格式
+                            const cleanPath = codeUrl.startsWith('/') ? codeUrl : '/' + codeUrl;
+                            codeUrl = `${API_BASE_URL}/uploads/canvas${cleanPath}`;
+                        }
                     }
                     
                     const codeRes = await fetch(codeUrl);
@@ -845,180 +863,10 @@
             const canvasId = `canvas-${level.id}`;
             const iframeId = `iframe-${level.id}`;
             
-            // 如果是React代码，使用Babel Standalone实时转译（暂时禁用）
-            if (false && isReactCode && !isHTMLDocument) {
-                console.log('检测到React代码，使用Babel Standalone实时转译');
-                
-                // 使用字符串拼接，避免模板字符串嵌套问题
-                const htmlHead = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>React Canvas</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-        #root { width: 100%; height: 100vh; }
-        .error { 
-            color: #ff4444; 
-            padding: 20px; 
-            background: #ffe0e0; 
-            border-radius: 8px;
-            margin: 20px;
-            font-family: monospace;
-            white-space: pre-wrap;
-        }
-    </style>
-    <!-- React CDN -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel Standalone -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback, useMemo } = React;
-        
-        // 用户代码
-`;
-                // 使用模板字符串生成 htmlTail
-                const htmlTail = `
-        
-        // 自动检测并渲染组件（如果代码中没有调用 ReactDOM.render）
-        setTimeout(() => {
-            try {
-                const rootElement = document.getElementById("root");
-                
-                // 如果 root 还是空的，说明代码中没有调用渲染函数
-                if (rootElement && rootElement.children.length === 0) {
-                    let ComponentToRender = null;
-                    
-                    // 尝试查找常见的组件名
-                    if (typeof App !== "undefined") {
-                        ComponentToRender = App;
-                    } else if (typeof Component !== "undefined") {
-                        ComponentToRender = Component;
-                    } else if (typeof MyComponent !== "undefined") {
-                        ComponentToRender = MyComponent;
-                    }
-                    
-                    // 如果找到了组件，自动渲染
-                    if (ComponentToRender) {
-                        const root = ReactDOM.createRoot(rootElement);
-                        root.render(React.createElement(ComponentToRender));
-                    } else {
-                        // 如果没找到，显示提示
-                        const errorMsg = '<div class="error"><strong>未找到可渲染的组件</strong><br><br>请确保：<br>1. 代码中定义了组件（如 function App() {} 或 const App = () => {}）<br>2. 或者直接调用 ReactDOM.render() 或 createRoot().render()<br><br>常见组件名：App, Component, MyComponent</div>';
-                        rootElement.innerHTML = errorMsg;
-                    }
-                }
-            } catch (e) {
-                console.error("React代码执行错误:", e);
-                const rootElement = document.getElementById("root");
-                if (rootElement) {
-                    const errorStart = '<div class="error"><strong>代码执行错误:</strong><br>';
-                    const errorEnd = '<br><br><strong>提示:</strong><br>1. 检查代码语法是否正确<br>2. 确保所有 import 的依赖都已通过 CDN 加载<br>3. 如果使用第三方库，需要在 HTML 中引入对应的 CDN 链接</div>';
-                    rootElement.innerHTML = errorStart + e.message + errorEnd;
-                }
-            }
-        }, 100);
-    </script>
-</body>
-</html>`;
-                
-                // 拼接完整的HTML
-                const reactHTML = htmlHead + code + htmlTail;
-                
-                const blob = new Blob([reactHTML], { type: 'text/html' });
-                const blobUrl = URL.createObjectURL(blob);
-                
-                return {
-                    html: `
-                        <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
-                            
-                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
-                                <p style="margin: 0 0 10px 0; font-weight: bold;">⚡ 实时React渲染</p>
-                                <p style="margin: 0; font-size: 13px;">代码已通过Babel Standalone实时转译并运行</p>
-                            </div>
-                            
-                            <div class="canvas-container" style="padding: 0; background: #000;">
-                                <div class="canvas-wrapper" style="padding: 0;">
-                                    <iframe 
-                                        id="${iframeId}" 
-                                        src="${blobUrl}" 
-                                        style="width: 100%; height: 650px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
-                                        allow="camera; microphone; autoplay"
-                                        allowfullscreen>
-                                    </iframe>
-                                </div>
-                            </div>
-                        </div>
-                    `,
-                    code: null,
-                    blobUrl: blobUrl
-                };
-            }
+            // React实时渲染功能已暂时禁用
+            // 如果需要启用，请取消下面的注释并移除 if (false) 条件
             
             // 如果是HTML文档，使用iframe加载
-            if (isHTMLDocument) {
-                console.log('检测到HTML文档，使用iframe加载');
-                // 创建Blob URL来加载HTML内容
-                const blob = new Blob([code], { type: 'text/html' });
-                const blobUrl = URL.createObjectURL(blob);
-                
-                return {
-                    html: `
-                        <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
-                            
-                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
-                                <p style="margin: 0 0 10px 0; font-weight: bold;">📷 摄像头权限提示</p>
-                                <p style="margin: 0; font-size: 13px;">此AR应用需要访问您的摄像头。当浏览器提示时，请点击"允许"。</p>
-                            </div>
-                            
-                            <div class="canvas-container" style="padding: 0; background: #000;">
-                                <div class="canvas-wrapper" style="padding: 0;">
-                                    <iframe 
-                                        id="${iframeId}" 
-                                        src="${blobUrl}"
-                                        style="width: 100%; height: 600px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
-                                        allow="camera; microphone; autoplay"
-                                        allowfullscreen>
-                                    </iframe>
-                                </div>
-                            </div>
-                            
-                            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-top: 15px; color: #856404; font-size: 13px;">
-                                <p style="margin: 0 0 8px 0; font-weight: bold;">💡 如果摄像头无法启动，请尝试：</p>
-                                <ol style="margin: 0; padding-left: 20px; text-align: left;">
-                                    <li>检查浏览器地址栏左侧的锁图标或摄像头图标</li>
-                                    <li>点击图标，选择"允许"摄像头和麦克风权限</li>
-                                    <li>如果已经拒绝过，请刷新页面并重新授权</li>
-                                    <li>确保没有其他应用正在使用摄像头</li>
-                                </ol>
-                            </div>
-                        </div>
-                    `,
-                    code: null, // HTML文档不需要执行代码
-                    blobUrl: blobUrl // 保存blob URL以便后续清理
-                };
-            }
-            
-            // 如果是纯JavaScript代码，使用canvas
-            // 如果是HTML文档，也使用iframe加载
             if (isHTMLDocument) {
                 console.log('检测到HTML文档，使用iframe加载');
                 const blob = new Blob([code], { type: 'text/html' });
