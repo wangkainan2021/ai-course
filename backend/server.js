@@ -24,6 +24,7 @@ const ensureDirectories = () => {
     path.join(__dirname, 'uploads', 'images'),
     path.join(__dirname, 'uploads', 'videos'),
     path.join(__dirname, 'uploads', 'canvas'),
+    path.join(__dirname, 'uploads', 'quiz'),
     path.join(__dirname, 'data')
   ];
   dirs.forEach(dir => {
@@ -39,12 +40,15 @@ ensureDirectories();
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     let uploadPath = '';
-    if (file.fieldname === 'images') {
+    // 支持 images（数组）和 image（单文件）两种字段名
+    if (file.fieldname === 'images' || file.fieldname === 'image') {
       uploadPath = path.join(__dirname, 'uploads', 'images');
     } else if (file.fieldname === 'video') {
       uploadPath = path.join(__dirname, 'uploads', 'videos');
     } else if (file.fieldname === 'canvas') {
       uploadPath = path.join(__dirname, 'uploads', 'canvas');
+    } else if (file.fieldname === 'quiz') {
+      uploadPath = path.join(__dirname, 'uploads', 'quiz');
     }
     cb(null, uploadPath);
   },
@@ -55,6 +59,89 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+
+function safeJsonParse(input) {
+  if (input === undefined || input === null) return null;
+  if (typeof input === 'object') return input;
+  if (typeof input !== 'string') return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  return JSON.parse(trimmed);
+}
+
+function validateQuizJson(quiz) {
+  // quiz format (suggested):
+  // { questions: [ { prompt, type:'single'|'multi', options:[{text,correct}], explanation? } ] }
+  if (!quiz || typeof quiz !== 'object') return { ok: false, message: 'quiz JSON 必须是对象' };
+  if (!Array.isArray(quiz.questions) || quiz.questions.length === 0) return { ok: false, message: 'quiz.questions 必须是非空数组' };
+  for (let i = 0; i < quiz.questions.length; i++) {
+    const q = quiz.questions[i];
+    if (!q || typeof q !== 'object') return { ok: false, message: `第${i + 1}题格式不正确` };
+    if (typeof q.prompt !== 'string' || !q.prompt.trim()) return { ok: false, message: `第${i + 1}题缺少 prompt` };
+    const type = q.type || 'single';
+    if (type !== 'single' && type !== 'multi') return { ok: false, message: `第${i + 1}题 type 只能是 single 或 multi` };
+    if (!Array.isArray(q.options) || q.options.length < 2) return { ok: false, message: `第${i + 1}题 options 至少2个` };
+    const correctCount = q.options.filter(o => o && o.correct === true).length;
+    if (type === 'single' && correctCount !== 1) return { ok: false, message: `第${i + 1}题为单选，correct 必须且只能有1个` };
+    if (type === 'multi' && correctCount < 1) return { ok: false, message: `第${i + 1}题为多选，correct 至少1个` };
+    for (let j = 0; j < q.options.length; j++) {
+      const o = q.options[j];
+      if (!o || typeof o !== 'object') return { ok: false, message: `第${i + 1}题第${j + 1}项格式不正确` };
+      if (typeof o.text !== 'string' || !o.text.trim()) return { ok: false, message: `第${i + 1}题第${j + 1}项缺少 text` };
+    }
+  }
+  return { ok: true };
+}
+
+function normalizeQuizJson(inputQuiz) {
+  // 支持两种格式：
+  // A) 标准格式：{ questions: [{ prompt, type, options:[{text,correct,rationale?}], explanation?, hint?, questionNumber? }] }
+  // B) 兼容格式（你提供的）：{ questions: [{ questionNumber, question, answerOptions:[{text,isCorrect,rationale}], hint }] }
+  if (!inputQuiz || typeof inputQuiz !== 'object') return null;
+  if (!Array.isArray(inputQuiz.questions)) return null;
+
+  const normalized = {
+    questions: inputQuiz.questions.map((q, idx) => {
+      if (!q || typeof q !== 'object') return null;
+
+      // Detect B-format
+      const hasB = (q.question !== undefined) || (q.answerOptions !== undefined);
+      if (hasB) {
+        const optionsB = Array.isArray(q.answerOptions) ? q.answerOptions : [];
+        return {
+          questionNumber: q.questionNumber ?? (idx + 1),
+          prompt: String(q.question ?? '').trim(),
+          type: 'single', // 你的数据是单选；如需多选，可后续扩展字段
+          hint: q.hint ?? '',
+          options: optionsB.map(o => ({
+            text: (o && o.text) ? String(o.text) : '',
+            correct: !!(o && o.isCorrect),
+            rationale: (o && o.rationale) ? String(o.rationale) : ''
+          })),
+          // explanation 可留空；我们用 option.rationale 在前端逐项展示
+          explanation: q.explanation ?? ''
+        };
+      }
+
+      // Assume A-format
+      const optionsA = Array.isArray(q.options) ? q.options : [];
+      return {
+        questionNumber: q.questionNumber ?? (idx + 1),
+        prompt: typeof q.prompt === 'string' ? q.prompt : String(q.prompt ?? ''),
+        type: q.type || 'single',
+        hint: q.hint ?? '',
+        explanation: q.explanation ?? '',
+        options: optionsA.map(o => ({
+          text: (o && o.text) ? String(o.text) : '',
+          correct: !!(o && o.correct),
+          rationale: (o && o.rationale) ? String(o.rationale) : ''
+        }))
+      };
+    }).filter(Boolean)
+  };
+
+  return normalized;
+}
 
 // 数据文件路径
 const COURSES_FILE = path.join(__dirname, 'data', 'courses.json');
@@ -190,6 +277,27 @@ app.get('/api/levels/:id', (req, res) => {
   }
 });
 
+// 单独上传图片（用于编辑时添加图片）
+// 兼容：images(多张) / image(单张)
+app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'image', maxCount: 1 }]), (req, res) => {
+  try {
+    const files = [
+      ...((req.files && req.files.images) ? req.files.images : []),
+      ...((req.files && req.files.image) ? req.files.image : []),
+    ];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: '请上传图片' });
+    }
+    
+    const imageUrls = files.map(file => `/uploads/images/${file.filename}`);
+    res.json({ success: true, data: imageUrls });
+  } catch (error) {
+    console.error('上传图片错误:', error);
+    res.status(500).json({ success: false, message: '上传失败: ' + error.message });
+  }
+});
+
 // 上传图片型关卡
 app.post('/api/levels/image', upload.array('images', 10), (req, res) => {
   try {
@@ -307,10 +415,67 @@ app.post('/api/levels/canvas', upload.single('canvas'), (req, res) => {
   }
 });
 
+// 上传选择题关卡（JSON）
+// 支持两种方式：
+// 1) multipart/form-data 上传 quiz 文件字段名：quiz（.json）
+// 2) application/json 直接提交 { title, description, quiz: {...} } 或 { title, description, quizJson: "..." }
+app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
+  try {
+    const { title, description, quiz, quizJson } = req.body || {};
+    const levels = readLevels();
+
+    let quizObj = null;
+
+    if (req.file) {
+      const filePath = path.join(__dirname, 'uploads', 'quiz', req.file.filename);
+      const raw = fs.readFileSync(filePath, 'utf8');
+      quizObj = safeJsonParse(raw);
+    } else if (quiz !== undefined) {
+      quizObj = safeJsonParse(quiz);
+    } else if (quizJson !== undefined) {
+      quizObj = safeJsonParse(quizJson);
+    } else if (req.body && typeof req.body === 'object') {
+      // 兼容直接把题目对象作为 body（例如 body.questions）
+      if (req.body.questions) quizObj = req.body;
+    }
+
+    if (!quizObj) {
+      return res.status(400).json({ success: false, message: '请提供选择题JSON（quiz/quizJson）或上传 .json 文件（字段名 quiz）' });
+    }
+
+    // 兼容不同JSON字段格式，先规范化
+    const normalizedQuiz = normalizeQuizJson(quizObj);
+    if (!normalizedQuiz) {
+      return res.status(400).json({ success: false, message: '选择题JSON结构不正确：必须包含 questions 数组' });
+    }
+
+    const v = validateQuizJson(normalizedQuiz);
+    if (!v.ok) {
+      return res.status(400).json({ success: false, message: v.message });
+    }
+
+    const newLevel = {
+      id: uuidv4(),
+      type: 'quiz',
+      title: title || '选择题关卡',
+      description: description || '',
+      quiz: normalizedQuiz,
+      createdAt: new Date().toISOString()
+    };
+
+    levels.push(newLevel);
+    writeLevels(levels);
+    res.json({ success: true, data: newLevel });
+  } catch (error) {
+    console.error('上传选择题关卡错误:', error);
+    res.status(500).json({ success: false, message: '上传失败: ' + error.message });
+  }
+});
+
 // 更新关卡
 app.put('/api/levels/:id', (req, res) => {
   try {
-    const { title, description, texts, code } = req.body;
+    const { title, description, texts, code, images, quiz } = req.body;
     const levels = readLevels();
     const index = levels.findIndex(l => l.id === req.params.id);
     
@@ -325,8 +490,40 @@ app.put('/api/levels/:id', (req, res) => {
     level.description = description !== undefined ? description : level.description;
     
     // 根据类型更新特定字段
-    if (level.type === 'image' && texts !== undefined) {
-      level.texts = Array.isArray(texts) ? texts : [];
+    if (level.type === 'image') {
+      // 如果提供了新的图片数组，更新图片列表
+      if (images !== undefined && Array.isArray(images)) {
+        // 找出被删除的图片文件并删除
+        const oldImages = level.images || [];
+        const newImages = images;
+        
+        oldImages.forEach(oldImg => {
+          if (!newImages.includes(oldImg)) {
+            // 图片被删除了，删除文件
+            const filePath = path.join(__dirname, oldImg);
+            if (fs.existsSync(filePath)) {
+              try {
+                fs.unlinkSync(filePath);
+                console.log('已删除图片文件:', oldImg);
+              } catch (error) {
+                console.error('删除图片文件失败:', error);
+              }
+            }
+          }
+        });
+        
+        level.images = newImages;
+      }
+      
+      // 更新文本说明
+      if (texts !== undefined) {
+        level.texts = Array.isArray(texts) ? texts : [];
+        // 确保文本数量与图片数量匹配
+        while (level.texts.length < level.images.length) {
+          level.texts.push('');
+        }
+        level.texts = level.texts.slice(0, level.images.length);
+      }
     } else if (level.type === 'canvas' && code !== undefined) {
       level.code = code;
       // 如果代码改变，更新代码文件
@@ -338,6 +535,18 @@ app.put('/api/levels/:id', (req, res) => {
           console.error('更新代码文件失败:', error);
         }
       }
+    } else if (level.type === 'quiz' && quiz !== undefined) {
+      let quizObj = null;
+      try {
+        quizObj = safeJsonParse(quiz);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'quiz 字段不是合法JSON' });
+      }
+      const normalizedQuiz = normalizeQuizJson(quizObj);
+      if (!normalizedQuiz) return res.status(400).json({ success: false, message: '选择题JSON结构不正确：必须包含 questions 数组' });
+      const v = validateQuizJson(normalizedQuiz);
+      if (!v.ok) return res.status(400).json({ success: false, message: v.message });
+      level.quiz = normalizedQuiz;
     }
     
     writeLevels(levels);

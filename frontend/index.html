@@ -379,6 +379,8 @@
                 html = result.html;
                 canvasCode = result.code;
                 blobUrl = result.blobUrl; // 保存blob URL以便后续清理
+            } else if (level.type === 'quiz') {
+                html = renderQuizLevel(level);
             }
             
             contentArea.innerHTML = html;
@@ -483,6 +485,113 @@
                 initImageGallery(level);
             }
         }
+
+        // 渲染选择题关卡
+        function renderQuizLevel(level) {
+            const quiz = level.quiz || { questions: [] };
+            const questions = quiz.questions || [];
+
+            if (!questions.length) {
+                return `
+                    <div class="level-container active">
+                        <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || '选择题关卡'}</h2>
+                        <div class="error">此选择题关卡没有题目</div>
+                    </div>
+                `;
+            }
+
+            const qHtml = questions.map((q, qi) => {
+                const type = q.type || 'single';
+                const inputType = type === 'multi' ? 'checkbox' : 'radio';
+                const options = q.options || [];
+                const optsHtml = options.map((o, oi) => {
+                    const id = `q${qi}_o${oi}`;
+                    return `
+                        <label for="${id}" style="display:flex; gap:10px; align-items:flex-start; padding:10px; border:1px solid #e5e7eb; border-radius:10px; margin:10px 0; cursor:pointer; background:#fff;">
+                            <input id="${id}" name="q${qi}" type="${inputType}" value="${oi}" style="margin-top:3px;">
+                            <span>${escapeHtml(o.text || '')}</span>
+                        </label>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="quiz-question" data-qi="${qi}" style="background:#f8f9fa; border-radius:12px; padding:16px; margin:16px 0;">
+                        <div style="font-weight:700; margin-bottom:10px;">${qi + 1}. ${escapeHtml(q.prompt || '')}</div>
+                        <div class="quiz-options">${optsHtml}</div>
+                        <div class="quiz-feedback" style="display:none; margin-top:12px; padding:10px; border-radius:10px;"></div>
+                    </div>
+                `;
+            }).join('');
+
+            // 把题库临时挂到window，供提交按钮判题
+            window.__currentQuiz = { levelId: level.id, quiz };
+
+            return `
+                <div class="level-container active">
+                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || '选择题关卡')}</h2>
+                    <p class="section-description" style="text-align: center; color: #666; margin-bottom: 20px;">${escapeHtml(level.description || '')}</p>
+
+                    <div style="max-width: 900px; margin: 0 auto;">
+                        ${qHtml}
+                        <div style="text-align:center; margin-top: 20px;">
+                            <button onclick="submitQuiz()" style="background:#667eea; color:#fff; border:none; padding:12px 18px; border-radius:12px; cursor:pointer; font-weight:700;">
+                                提交答案
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // 提交并判题
+        window.submitQuiz = function() {
+            const payload = window.__currentQuiz;
+            if (!payload || !payload.quiz) return;
+            const questions = payload.quiz.questions || [];
+
+            questions.forEach((q, qi) => {
+                const type = q.type || 'single';
+                const options = q.options || [];
+                const correct = options.map((o, oi) => (o && o.correct === true ? oi : null)).filter(v => v !== null);
+
+                const selected = Array.from(document.querySelectorAll(`input[name="q${qi}"]:checked`)).map(el => Number(el.value));
+
+                const isCorrect = (type === 'multi')
+                    ? (selected.length === correct.length && selected.every(v => correct.includes(v)))
+                    : (selected.length === 1 && correct.includes(selected[0]));
+
+                const wrap = document.querySelector(`.quiz-question[data-qi="${qi}"] .quiz-feedback`);
+                if (!wrap) return;
+                wrap.style.display = 'block';
+                wrap.style.border = isCorrect ? '1px solid #86efac' : '1px solid #fca5a5';
+                wrap.style.background = isCorrect ? '#dcfce7' : '#fee2e2';
+                const exp = q.explanation ? `<div style="margin-top:8px; color:#374151;"><strong>解析：</strong>${escapeHtml(q.explanation)}</div>` : '';
+                const correctLabels = correct.map(idx => options[idx] ? options[idx].text : '').filter(Boolean).map(escapeHtml).join('、');
+                const selectedRationales = selected
+                    .map(idx => options[idx] && options[idx].rationale ? options[idx].rationale : '')
+                    .filter(Boolean)
+                    .map(r => `<div style="margin-top:6px; color:#374151;"><strong>你选的理由：</strong>${escapeHtml(r)}</div>`)
+                    .join('');
+                const hint = q.hint ? `<div style="margin-top:8px; color:#6b7280;"><strong>提示：</strong>${escapeHtml(q.hint)}</div>` : '';
+                wrap.innerHTML = `
+                    <div style="font-weight:700; color:${isCorrect ? '#166534' : '#991b1b'};">
+                        ${isCorrect ? '正确' : '不正确'}（正确答案：${correctLabels || '未标注'}）
+                    </div>
+                    ${selectedRationales}
+                    ${exp}
+                    ${hint}
+                `;
+            });
+        };
 
         // 渲染图片关卡
         function renderImageLevel(level) {
