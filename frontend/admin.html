@@ -690,7 +690,23 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:3000/api';
+        // 自动检测环境并设置API地址
+        // 环境检测：只有在 localhost/127.0.0.1 且不是 file:// 协议时才使用本地 API
+        // file:// 协议（直接打开本地文件）使用线上 API
+        const hostname = window.location.hostname;
+        const isLocal = (hostname === 'localhost' || hostname === '127.0.0.1') && 
+                       window.location.protocol !== 'file:';
+        
+        // 线上后端地址（部署后端后需要修改这里）
+        const PRODUCTION_API_URL = 'https://backend-topaz-zeta-46.vercel.app/api';
+        
+        const API_BASE_URL = isLocal 
+            ? 'http://localhost:3000/api' 
+            : PRODUCTION_API_URL;
+        
+        console.log('当前环境:', isLocal ? '本地开发' : '线上生产');
+        console.log('API地址:', API_BASE_URL);
+        
         let imageItems = []; // 存储图片项：{file, preview, text}
         let selectedVideoFile = null;
         let selectedCanvasFile = null;

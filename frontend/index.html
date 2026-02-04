@@ -271,7 +271,24 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:3000/api';
+        // 自动检测环境并设置API地址
+        // 如果是本地开发环境（localhost 或 127.0.0.1），使用本地后端
+        // 否则使用线上后端（需要部署后端服务）
+        // 注意：file:// 协议（直接打开本地文件）也使用线上后端
+        const hostname = window.location.hostname;
+        const isLocal = (hostname === 'localhost' || hostname === '127.0.0.1') && 
+                       window.location.protocol !== 'file:';
+        
+        // 线上后端地址（部署后端后需要修改这里）
+        const PRODUCTION_API_URL = 'https://backend-topaz-zeta-46.vercel.app/api';
+        
+        const API_BASE_URL = isLocal 
+            ? 'http://localhost:3000/api' 
+            : PRODUCTION_API_URL;
+        
+        console.log('当前环境:', isLocal ? '本地开发' : '线上生产');
+        console.log('API地址:', API_BASE_URL);
+        
         let currentCourse = null;
         let currentLevelIndex = 0;
         let currentImageIndex = 0;
@@ -283,15 +300,41 @@
                 const coursesRes = await fetch(`${API_BASE_URL}/courses`);
                 const coursesData = await coursesRes.json();
                 
-                if (coursesData.success && coursesData.data.length > 0) {
-                    currentCourse = coursesData.data[0];
-                    loadCourse(currentCourse);
+                if (coursesData.success) {
+                    if (coursesData.data.length > 0) {
+                        currentCourse = coursesData.data[0];
+                        loadCourse(currentCourse);
+                    } else {
+                        // 数据为空，提示初始化
+                        let msg = '暂无课程数据';
+                        if (!isLocal) {
+                            msg += '<br><br>请使用"初始化数据工具.html"初始化数据到 Vercel 后端';
+                        } else {
+                            msg += '<br><br>请在管理端创建课程和关卡';
+                        }
+                        showError(msg);
+                    }
                 } else {
-                    showError('暂无课程，请先创建课程');
+                    showError('获取课程失败：' + (coursesData.message || '未知错误'));
                 }
             } catch (error) {
                 console.error('加载失败:', error);
-                showError('加载课程失败，请检查后端服务是否运行');
+                console.error('API地址:', API_BASE_URL);
+                console.error('错误详情:', error.message);
+                
+                // 更详细的错误提示
+                let errorMsg = '加载课程失败';
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMsg += '：无法连接到后端服务';
+                    if (!isLocal) {
+                        errorMsg += '<br><br>线上环境提示：<br>1. 请确保已使用"初始化数据工具.html"初始化数据<br>2. 后端地址：' + PRODUCTION_API_URL;
+                    } else {
+                        errorMsg += '<br><br>本地环境提示：<br>1. 请确保后端服务已启动（cd backend && npm start）<br>2. 服务应运行在 http://localhost:3000';
+                    }
+                } else {
+                    errorMsg += '：' + error.message;
+                }
+                showError(errorMsg);
             }
         }
 
@@ -728,8 +771,142 @@
                                    code.includes('<html') ||
                                    code.includes('<!DOCTYPE');
             
+            // 检测是否是React代码（包含import或JSX语法）
+            const isReactCode = code.includes('import ') || 
+                               code.includes('from ') ||
+                               (code.includes('<') && code.includes('/>')) ||
+                               code.includes('React.createElement') ||
+                               code.includes('useState') ||
+                               code.includes('useEffect');
+            
             const canvasId = `canvas-${level.id}`;
             const iframeId = `iframe-${level.id}`;
+            
+            // 如果是React代码，使用Babel Standalone实时转译
+            if (isReactCode && !isHTMLDocument) {
+                console.log('检测到React代码，使用Babel Standalone实时转译');
+                
+                // 使用字符串拼接，避免模板字符串嵌套问题
+                const htmlHead = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Canvas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #root { width: 100%; height: 100vh; }
+        .error { 
+            color: #ff4444; 
+            padding: 20px; 
+            background: #ffe0e0; 
+            border-radius: 8px;
+            margin: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        
+        // 用户代码
+`;
+                // 使用模板字符串生成 htmlTail
+                const htmlTail = `
+        
+        // 自动检测并渲染组件（如果代码中没有调用 ReactDOM.render）
+        setTimeout(() => {
+            try {
+                const rootElement = document.getElementById("root");
+                
+                // 如果 root 还是空的，说明代码中没有调用渲染函数
+                if (rootElement && rootElement.children.length === 0) {
+                    let ComponentToRender = null;
+                    
+                    // 尝试查找常见的组件名
+                    if (typeof App !== "undefined") {
+                        ComponentToRender = App;
+                    } else if (typeof Component !== "undefined") {
+                        ComponentToRender = Component;
+                    } else if (typeof MyComponent !== "undefined") {
+                        ComponentToRender = MyComponent;
+                    }
+                    
+                    // 如果找到了组件，自动渲染
+                    if (ComponentToRender) {
+                        const root = ReactDOM.createRoot(rootElement);
+                        root.render(React.createElement(ComponentToRender));
+                    } else {
+                        // 如果没找到，显示提示
+                        const errorMsg = '<div class="error"><strong>未找到可渲染的组件</strong><br><br>请确保：<br>1. 代码中定义了组件（如 function App() {} 或 const App = () => {}）<br>2. 或者直接调用 ReactDOM.render() 或 createRoot().render()<br><br>常见组件名：App, Component, MyComponent</div>';
+                        rootElement.innerHTML = errorMsg;
+                    }
+                }
+            } catch (e) {
+                console.error("React代码执行错误:", e);
+                const rootElement = document.getElementById("root");
+                if (rootElement) {
+                    const errorStart = '<div class="error"><strong>代码执行错误:</strong><br>';
+                    const errorEnd = '<br><br><strong>提示:</strong><br>1. 检查代码语法是否正确<br>2. 确保所有 import 的依赖都已通过 CDN 加载<br>3. 如果使用第三方库，需要在 HTML 中引入对应的 CDN 链接</div>';
+                    rootElement.innerHTML = errorStart + e.message + errorEnd;
+                }
+            }
+        }, 100);
+    </script>
+</body>
+</html>`;
+                
+                // 拼接完整的HTML
+                const reactHTML = htmlHead + code + htmlTail;
+                
+                const blob = new Blob([reactHTML], { type: 'text/html' });
+                const blobUrl = URL.createObjectURL(blob);
+                
+                return {
+                    html: `
+                        <div class="level-container active">
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
+                                <p style="margin: 0 0 10px 0; font-weight: bold;">⚡ 实时React渲染</p>
+                                <p style="margin: 0; font-size: 13px;">代码已通过Babel Standalone实时转译并运行</p>
+                            </div>
+                            
+                            <div class="canvas-container" style="padding: 0; background: #000;">
+                                <div class="canvas-wrapper" style="padding: 0;">
+                                    <iframe 
+                                        id="${iframeId}" 
+                                        src="${blobUrl}" 
+                                        style="width: 100%; height: 650px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
+                                        allow="camera; microphone; autoplay"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                    code: null,
+                    blobUrl: blobUrl
+                };
+            }
             
             // 如果是HTML文档，使用iframe加载
             if (isHTMLDocument) {
@@ -831,14 +1008,33 @@
         // 显示错误
         function showError(message) {
             const contentArea = document.getElementById('contentArea');
-            contentArea.innerHTML = `<div class="error">
-                <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
-                <p>${message}</p>
-                <p style="margin-top: 15px; font-size: 14px; color: #666;">
+            const isLocalEnv = window.location.hostname === 'localhost' || 
+                              window.location.hostname === '127.0.0.1' ||
+                              window.location.hostname === '';
+            
+            let errorTips = '';
+            if (isLocalEnv) {
+                errorTips = `
                     请确保：<br>
                     1. 后端服务已启动（cd backend && npm start）<br>
                     2. 服务运行在 http://localhost:3000<br>
                     3. 已在管理端创建了课程和关卡
+                `;
+            } else {
+                errorTips = `
+                    <strong>线上环境提示：</strong><br>
+                    1. 后端服务尚未部署或配置<br>
+                    2. 请部署后端服务到云平台（如 Vercel、Railway）<br>
+                    3. 部署后，修改前端代码中的 PRODUCTION_API_URL 为实际后端地址<br>
+                    4. 当前配置的后端地址：${API_BASE_URL}
+                `;
+            }
+            
+            contentArea.innerHTML = `<div class="error">
+                <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
+                <p>${message}</p>
+                <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                    ${errorTips}
                 </p>
             </div>`;
         }
