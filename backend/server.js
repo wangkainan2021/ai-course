@@ -5,12 +5,20 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { put, head } = require('@vercel/blob');
 
 const app = express();
 
 // 检测运行环境
 const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
 const PORT = process.env.PORT || 3000;
+
+// Vercel Blob Storage 配置
+// 支持多种可能的 token 名称
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || 
+                   process.env.BLOB_STORE_TOKEN || 
+                   process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+const USE_BLOB_STORAGE = isVercel && BLOB_TOKEN;
 
 // 中间件
 app.use(cors());
@@ -60,28 +68,57 @@ const ensureDirectories = () => {
 ensureDirectories();
 
 // 配置文件上传
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    let uploadPath = '';
-    // 支持 images（数组）和 image（单文件）两种字段名
-    if (file.fieldname === 'images' || file.fieldname === 'image') {
-      uploadPath = path.join(STORAGE_BASE, 'uploads', 'images');
-    } else if (file.fieldname === 'video') {
-      uploadPath = path.join(STORAGE_BASE, 'uploads', 'videos');
-    } else if (file.fieldname === 'canvas') {
-      uploadPath = path.join(STORAGE_BASE, 'uploads', 'canvas');
-    } else if (file.fieldname === 'quiz') {
-      uploadPath = path.join(STORAGE_BASE, 'uploads', 'quiz');
-    }
-    cb(null, uploadPath);
-  },
-  filename: function (req, file, cb) {
-    const uniqueName = `${uuidv4()}-${file.originalname}`;
-    cb(null, uniqueName);
-  }
-});
+// 如果使用 Blob Storage，使用内存存储；否则使用磁盘存储
+const storage = USE_BLOB_STORAGE 
+  ? multer.memoryStorage()  // 内存存储，稍后上传到 Blob
+  : multer.diskStorage({
+      destination: function (req, file, cb) {
+        let uploadPath = '';
+        // 支持 images（数组）和 image（单文件）两种字段名
+        if (file.fieldname === 'images' || file.fieldname === 'image') {
+          uploadPath = path.join(STORAGE_BASE, 'uploads', 'images');
+        } else if (file.fieldname === 'video') {
+          uploadPath = path.join(STORAGE_BASE, 'uploads', 'videos');
+        } else if (file.fieldname === 'canvas') {
+          uploadPath = path.join(STORAGE_BASE, 'uploads', 'canvas');
+        } else if (file.fieldname === 'quiz') {
+          uploadPath = path.join(STORAGE_BASE, 'uploads', 'quiz');
+        }
+        cb(null, uploadPath);
+      },
+      filename: function (req, file, cb) {
+        const uniqueName = `${uuidv4()}-${file.originalname}`;
+        cb(null, uniqueName);
+      }
+    });
 
 const upload = multer({ storage: storage });
+
+// 上传文件到 Vercel Blob Storage 的辅助函数
+async function uploadToBlob(file, fileType) {
+  if (!USE_BLOB_STORAGE) {
+    // 本地环境：返回本地路径
+    return `/uploads/${fileType}/${file.filename}`;
+  }
+  
+  try {
+    const uniqueName = `${uuidv4()}-${file.originalname}`;
+    const blobPath = `uploads/${fileType}/${uniqueName}`;
+    
+    // 上传到 Blob Storage
+    const blob = await put(blobPath, file.buffer, {
+      access: 'public',
+      contentType: file.mimetype,
+      token: BLOB_TOKEN
+    });
+    
+    // 返回 Blob URL（可以直接访问）
+    return blob.url;
+  } catch (error) {
+    console.error('上传到 Blob Storage 失败:', error);
+    throw new Error('文件上传失败: ' + error.message);
+  }
+}
 
 function safeJsonParse(input) {
   if (input === undefined || input === null) return null;
@@ -356,7 +393,7 @@ app.get('/api/levels/:id', (req, res) => {
 
 // 单独上传图片（用于编辑时添加图片）
 // 兼容：images(多张) / image(单张)
-app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'image', maxCount: 1 }]), (req, res) => {
+app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
   try {
     const files = [
       ...((req.files && req.files.images) ? req.files.images : []),
@@ -367,7 +404,11 @@ app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 
       return res.status(400).json({ success: false, message: '请上传图片' });
     }
     
-    const imageUrls = files.map(file => `/uploads/images/${file.filename}`);
+    // 上传到 Blob Storage 或使用本地路径
+    const imageUrls = await Promise.all(
+      files.map(file => uploadToBlob(file, 'images'))
+    );
+    
     res.json({ success: true, data: imageUrls });
   } catch (error) {
     console.error('上传图片错误:', error);
@@ -376,7 +417,7 @@ app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 
 });
 
 // 上传图片型关卡
-app.post('/api/levels/image', upload.array('images', 10), (req, res) => {
+app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
   try {
     const { title, description, texts } = req.body;
     const levels = readLevels();
@@ -385,7 +426,11 @@ app.post('/api/levels/image', upload.array('images', 10), (req, res) => {
       return res.status(400).json({ success: false, message: '请至少上传一张图片' });
     }
     
-    const imageUrls = req.files.map(file => `/uploads/images/${file.filename}`);
+    // 上传到 Blob Storage 或使用本地路径
+    const imageUrls = await Promise.all(
+      req.files.map(file => uploadToBlob(file, 'images'))
+    );
+    
     let textArray = [];
     
     if (texts) {
@@ -422,7 +467,7 @@ app.post('/api/levels/image', upload.array('images', 10), (req, res) => {
 });
 
 // 上传视频型关卡
-app.post('/api/levels/video', upload.single('video'), (req, res) => {
+app.post('/api/levels/video', upload.single('video'), async (req, res) => {
   try {
     const { title, description } = req.body;
     const levels = readLevels();
@@ -431,7 +476,8 @@ app.post('/api/levels/video', upload.single('video'), (req, res) => {
       return res.status(400).json({ success: false, message: '请上传视频文件' });
     }
     
-    const videoUrl = `/uploads/videos/${req.file.filename}`;
+    // 上传到 Blob Storage 或使用本地路径
+    const videoUrl = await uploadToBlob(req.file, 'videos');
     
     const newLevel = {
       id: uuidv4(),
@@ -453,7 +499,7 @@ app.post('/api/levels/video', upload.single('video'), (req, res) => {
 });
 
 // 上传Gemini Canvas代码应用关卡
-app.post('/api/levels/canvas', upload.single('canvas'), (req, res) => {
+app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
   try {
     const { title, description, code, appUrl } = req.body;
     const levels = readLevels();
@@ -477,13 +523,27 @@ app.post('/api/levels/canvas', upload.single('canvas'), (req, res) => {
     // 保存代码文件
     let codeUrl = null;
     if (req.file) {
-      codeUrl = `/uploads/canvas/${req.file.filename}`;
+      // 上传到 Blob Storage 或使用本地路径
+      codeUrl = await uploadToBlob(req.file, 'canvas');
     } else if (code) {
       // 如果没有上传文件，但有代码内容，保存为文件
-      const codeFileName = `${uuidv4()}.js`;
-      const codePath = path.join(STORAGE_BASE, 'uploads', 'canvas', codeFileName);
-      fs.writeFileSync(codePath, code);
-      codeUrl = `/uploads/canvas/${codeFileName}`;
+      if (USE_BLOB_STORAGE) {
+        // 上传到 Blob Storage
+        const codeFileName = `${uuidv4()}.js`;
+        const blobPath = `uploads/canvas/${codeFileName}`;
+        const blob = await put(blobPath, Buffer.from(code, 'utf8'), {
+          access: 'public',
+          contentType: 'application/javascript',
+          token: BLOB_TOKEN
+        });
+        codeUrl = blob.url;
+      } else {
+        // 本地存储
+        const codeFileName = `${uuidv4()}.js`;
+        const codePath = path.join(STORAGE_BASE, 'uploads', 'canvas', codeFileName);
+        fs.writeFileSync(codePath, code);
+        codeUrl = `/uploads/canvas/${codeFileName}`;
+      }
     } else {
       return res.status(400).json({ success: false, message: '请提供代码内容或上传代码文件' });
     }
