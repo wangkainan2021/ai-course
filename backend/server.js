@@ -299,9 +299,90 @@ app.get('/api', (req, res) => {
         'POST /api/levels/image/upload': '上传单个图片（用于编辑）',
         'PUT /api/levels/:id': '更新关卡',
         'DELETE /api/levels/:id': '删除关卡'
+      },
+      diagnostic: {
+        'GET /api/diagnostic': '诊断数据存储状态'
       }
     }
   });
+});
+
+// 诊断 API - 检查数据存储状态
+app.get('/api/diagnostic', async (req, res) => {
+  try {
+    const diagnostic = {
+      environment: {
+        isVercel: isVercel,
+        hasBlobToken: !!BLOB_TOKEN,
+        useBlobStorage: USE_BLOB_STORAGE,
+        storageBase: STORAGE_BASE
+      },
+      data: {
+        courses: {
+          count: 0,
+          source: 'unknown',
+          error: null
+        },
+        levels: {
+          count: 0,
+          source: 'unknown',
+          error: null
+        }
+      },
+      blobStorage: {
+        enabled: USE_BLOB_STORAGE,
+        tokenConfigured: !!BLOB_TOKEN,
+        paths: {
+          courses: BLOB_COURSES_PATH,
+          levels: BLOB_LEVELS_PATH
+        }
+      }
+    };
+    
+    // 尝试读取课程数据
+    try {
+      const courses = await readCourses();
+      diagnostic.data.courses.count = courses.length;
+      diagnostic.data.courses.source = USE_BLOB_STORAGE ? 'blob-storage' : 'local-fs';
+    } catch (error) {
+      diagnostic.data.courses.error = error.message;
+    }
+    
+    // 尝试读取关卡数据
+    try {
+      const levels = await readLevels();
+      diagnostic.data.levels.count = levels.length;
+      diagnostic.data.levels.source = USE_BLOB_STORAGE ? 'blob-storage' : 'local-fs';
+    } catch (error) {
+      diagnostic.data.levels.error = error.message;
+    }
+    
+    // 如果使用 Blob Storage，尝试检查文件是否存在
+    if (USE_BLOB_STORAGE && BLOB_TOKEN) {
+      try {
+        const coursesBlob = await head(BLOB_COURSES_PATH, { token: BLOB_TOKEN });
+        diagnostic.blobStorage.coursesExists = true;
+        diagnostic.blobStorage.coursesSize = coursesBlob.size;
+      } catch (error) {
+        diagnostic.blobStorage.coursesExists = false;
+        diagnostic.blobStorage.coursesError = error.message;
+      }
+      
+      try {
+        const levelsBlob = await head(BLOB_LEVELS_PATH, { token: BLOB_TOKEN });
+        diagnostic.blobStorage.levelsExists = true;
+        diagnostic.blobStorage.levelsSize = levelsBlob.size;
+      } catch (error) {
+        diagnostic.blobStorage.levelsExists = false;
+        diagnostic.blobStorage.levelsError = error.message;
+      }
+    }
+    
+    res.json({ success: true, data: diagnostic });
+  } catch (error) {
+    console.error('诊断失败:', error);
+    res.status(500).json({ success: false, message: '诊断失败: ' + error.message });
+  }
 });
 
 // 数据文件在 Blob Storage 中的路径
@@ -581,7 +662,13 @@ app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
     };
     
     levels.push(newLevel);
+    console.log('[上传图片关卡] 准备写入，当前关卡数量:', levels.length);
     await writeLevels(levels);
+    console.log('[上传图片关卡] 写入完成');
+    
+    // 验证写入
+    const verify = await readLevels();
+    console.log('[上传图片关卡] 验证读取，关卡数量:', verify.length);
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
@@ -632,7 +719,13 @@ app.post('/api/levels/video', upload.single('video'), async (req, res) => {
     };
     
     levels.push(newLevel);
+    console.log('[上传视频关卡] 准备写入，当前关卡数量:', levels.length);
     await writeLevels(levels);
+    console.log('[上传视频关卡] 写入完成');
+    
+    // 验证写入
+    const verify = await readLevels();
+    console.log('[上传视频关卡] 验证读取，关卡数量:', verify.length);
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
@@ -666,7 +759,14 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
         createdAt: new Date().toISOString()
       };
       levels.push(newLevel);
+      console.log('[上传Canvas关卡-appUrl] 准备写入，当前关卡数量:', levels.length);
       await writeLevels(levels);
+      console.log('[上传Canvas关卡-appUrl] 写入完成');
+      
+      // 验证写入
+      const verify = await readLevels();
+      console.log('[上传Canvas关卡-appUrl] 验证读取，关卡数量:', verify.length);
+      
       return res.json({ success: true, data: newLevel });
     }
 
@@ -718,7 +818,13 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
     };
     
     levels.push(newLevel);
+    console.log('[上传Canvas关卡] 准备写入，当前关卡数量:', levels.length);
     await writeLevels(levels);
+    console.log('[上传Canvas关卡] 写入完成');
+    
+    // 验证写入
+    const verify = await readLevels();
+    console.log('[上传Canvas关卡] 验证读取，关卡数量:', verify.length);
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
@@ -776,7 +882,14 @@ app.post('/api/levels/quiz', upload.single('quiz'), async (req, res) => {
     };
 
     levels.push(newLevel);
+    console.log('[上传选择题关卡] 准备写入，当前关卡数量:', levels.length);
     await writeLevels(levels);
+    console.log('[上传选择题关卡] 写入完成');
+    
+    // 验证写入
+    const verify = await readLevels();
+    console.log('[上传选择题关卡] 验证读取，关卡数量:', verify.length);
+    
     res.json({ success: true, data: newLevel });
   } catch (error) {
     console.error('上传选择题关卡错误:', error);
@@ -898,7 +1011,14 @@ app.put('/api/levels/:id', upload.fields([{ name: 'images', maxCount: 10 }, { na
       level.quiz = normalizedQuiz;
     }
     
+    console.log('[更新关卡] 准备写入，当前关卡数量:', levels.length);
     await writeLevels(levels);
+    console.log('[更新关卡] 写入完成');
+    
+    // 验证写入
+    const verify = await readLevels();
+    console.log('[更新关卡] 验证读取，关卡数量:', verify.length);
+    
     res.json({ success: true, data: level });
   } catch (error) {
     console.error('更新关卡错误:', error);
