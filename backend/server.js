@@ -124,11 +124,14 @@ async function uploadToBlob(file, fileType) {
   }
   
   try {
-    const uniqueName = `${uuidv4()}-${file.originalname}`;
+    // 生成更唯一的文件名：时间戳 + UUID + 随机数 + 原始文件名
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15);
+    const uniqueName = `${timestamp}-${uuidv4()}-${random}-${file.originalname}`;
     const blobPath = `uploads/${fileType}/${uniqueName}`;
     
     // 上传到 Blob Storage
-    // 使用 addRandomSuffix 确保文件名唯一，避免冲突
+    // 使用 addRandomSuffix 作为双重保险，确保文件名唯一，避免冲突
     const blob = await put(blobPath, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
