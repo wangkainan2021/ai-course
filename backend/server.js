@@ -128,10 +128,12 @@ async function uploadToBlob(file, fileType) {
     const blobPath = `uploads/${fileType}/${uniqueName}`;
     
     // 上传到 Blob Storage
+    // 使用 addRandomSuffix 确保文件名唯一，避免冲突
     const blob = await put(blobPath, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
-      token: BLOB_TOKEN
+      token: BLOB_TOKEN,
+      addRandomSuffix: true
     });
     
     // 返回 Blob URL（可以直接访问）
