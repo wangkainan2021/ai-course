@@ -654,6 +654,33 @@
 
         // 渲染Canvas关卡
         async function renderCanvasLevel(level) {
+            // 方式0：已部署应用URL（React/Vite build等），优先 iframe 打开
+            if (level.appUrl && String(level.appUrl).trim()) {
+                const appUrl = String(level.appUrl).trim();
+                const iframeId = `iframe-${level.id}`;
+                return {
+                    html: `
+                        <div class="level-container active">
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+
+                            <div class="canvas-container" style="padding: 0; background: #000;">
+                                <div class="canvas-wrapper" style="padding: 0;">
+                                    <iframe
+                                        id="${iframeId}"
+                                        src="${appUrl}"
+                                        style="width: 100%; height: 650px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
+                                        allow="camera; microphone; autoplay"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                    code: null
+                };
+            }
+
             let code = level.code || '';
             
             // 如果有代码URL，优先加载代码文件

@@ -378,9 +378,25 @@ app.post('/api/levels/video', upload.single('video'), (req, res) => {
 // 上传Gemini Canvas代码应用关卡
 app.post('/api/levels/canvas', upload.single('canvas'), (req, res) => {
   try {
-    const { title, description, code } = req.body;
+    const { title, description, code, appUrl } = req.body;
     const levels = readLevels();
     
+    // 方式0：提供已部署应用URL（例如 React/Vite build 后的页面），学生端用 iframe 打开
+    const trimmedAppUrl = typeof appUrl === 'string' ? appUrl.trim() : '';
+    if (trimmedAppUrl) {
+      const newLevel = {
+        id: uuidv4(),
+        type: 'canvas',
+        title: title || 'Canvas关卡',
+        description: description || '',
+        appUrl: trimmedAppUrl,
+        createdAt: new Date().toISOString()
+      };
+      levels.push(newLevel);
+      writeLevels(levels);
+      return res.json({ success: true, data: newLevel });
+    }
+
     // 保存代码文件
     let codeUrl = null;
     if (req.file) {
@@ -475,7 +491,7 @@ app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
 // 更新关卡
 app.put('/api/levels/:id', (req, res) => {
   try {
-    const { title, description, texts, code, images, quiz } = req.body;
+    const { title, description, texts, code, images, quiz, appUrl } = req.body;
     const levels = readLevels();
     const index = levels.findIndex(l => l.id === req.params.id);
     
@@ -535,6 +551,10 @@ app.put('/api/levels/:id', (req, res) => {
           console.error('更新代码文件失败:', error);
         }
       }
+    } else if (level.type === 'canvas' && appUrl !== undefined) {
+      // 切换为 iframe 应用模式
+      const trimmed = typeof appUrl === 'string' ? appUrl.trim() : '';
+      level.appUrl = trimmed;
     } else if (level.type === 'quiz' && quiz !== undefined) {
       let quizObj = null;
       try {
