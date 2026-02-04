@@ -182,6 +182,35 @@ const initDataFiles = () => {
 
 initDataFiles();
 
+// API 根路由 - 返回 API 信息
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'AI学习课程后端API',
+    version: '1.0.0',
+    endpoints: {
+      courses: {
+        'GET /api/courses': '获取所有课程',
+        'GET /api/courses/:id': '获取课程详情',
+        'POST /api/courses': '创建课程',
+        'PUT /api/courses/:id': '更新课程',
+        'DELETE /api/courses/:id': '删除课程'
+      },
+      levels: {
+        'GET /api/levels': '获取所有关卡',
+        'GET /api/levels/:id': '获取关卡详情',
+        'POST /api/levels/image': '上传图片型关卡',
+        'POST /api/levels/video': '上传视频型关卡',
+        'POST /api/levels/canvas': '上传Canvas代码应用关卡',
+        'POST /api/levels/quiz': '上传选择题关卡',
+        'POST /api/levels/image/upload': '上传单个图片（用于编辑）',
+        'PUT /api/levels/:id': '更新关卡',
+        'DELETE /api/levels/:id': '删除关卡'
+      }
+    }
+  });
+});
+
 // 读取数据
 const readCourses = () => {
   try {
