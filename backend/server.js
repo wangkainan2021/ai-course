@@ -794,7 +794,8 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
             access: 'public',
             contentType: 'application/javascript',
             token: BLOB_TOKEN,
-            addRandomSuffix: true
+            addRandomSuffix: true,
+            allowOverwrite: true
           });
           codeUrl = blob.url;
         } catch (error) {
