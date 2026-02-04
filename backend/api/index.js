@@ -6,4 +6,5 @@
 const app = require('../server');
 
 // Vercel 需要导出 handler 函数
+// 对于 Express 应用，直接导出 app 即可
 module.exports = app;
