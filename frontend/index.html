@@ -271,76 +271,27 @@
     </div>
 
     <script>
-        // 自动检测环境并设置API地址
-        // 如果是本地开发环境（localhost 或 127.0.0.1），使用本地后端
-        // 否则使用线上后端（需要部署后端服务）
-        // 注意：file:// 协议（直接打开本地文件）也使用线上后端
-        const hostname = window.location.hostname;
-        const isLocal = (hostname === 'localhost' || hostname === '127.0.0.1') && 
-                       window.location.protocol !== 'file:';
-        
-        // 线上后端地址（部署后端后需要修改这里）
-        const PRODUCTION_API_URL = 'https://backend-topaz-zeta-46.vercel.app/api';
-        
-        const API_BASE_URL = isLocal 
-            ? 'http://localhost:3000/api' 
-            : PRODUCTION_API_URL;
-        
-        console.log('当前环境:', isLocal ? '本地开发' : '线上生产');
-        console.log('API地址:', API_BASE_URL);
-        
+        const API_BASE_URL = 'http://localhost:3000/api';
         let currentCourse = null;
         let currentLevelIndex = 0;
         let currentImageIndex = 0;
 
         // 初始化
         async function init() {
-            // 清除"加载中"提示
-            const contentArea = document.getElementById('contentArea');
-            if (contentArea && contentArea.innerHTML.includes('加载中')) {
-                contentArea.innerHTML = '';
-            }
-            
             try {
                 // 获取课程列表（这里简化处理，使用第一个课程）
                 const coursesRes = await fetch(`${API_BASE_URL}/courses`);
                 const coursesData = await coursesRes.json();
                 
-                if (coursesData.success) {
-                    if (coursesData.data.length > 0) {
-                        currentCourse = coursesData.data[0];
-                        loadCourse(currentCourse);
-                    } else {
-                        // 数据为空，提示初始化
-                        let msg = '暂无课程数据';
-                        if (!isLocal) {
-                            msg += '<br><br>请使用"初始化数据工具.html"初始化数据到 Vercel 后端';
-                        } else {
-                            msg += '<br><br>请在管理端创建课程和关卡';
-                        }
-                        showError(msg);
-                    }
+                if (coursesData.success && coursesData.data.length > 0) {
+                    currentCourse = coursesData.data[0];
+                    loadCourse(currentCourse);
                 } else {
-                    showError('获取课程失败：' + (coursesData.message || '未知错误'));
+                    showError('暂无课程，请先创建课程');
                 }
             } catch (error) {
                 console.error('加载失败:', error);
-                console.error('API地址:', API_BASE_URL);
-                console.error('错误详情:', error.message);
-                
-                // 更详细的错误提示
-                let errorMsg = '加载课程失败';
-                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    errorMsg += '：无法连接到后端服务';
-                    if (!isLocal) {
-                        errorMsg += '<br><br>线上环境提示：<br>1. 请确保已使用"初始化数据工具.html"初始化数据<br>2. 后端地址：' + PRODUCTION_API_URL;
-                    } else {
-                        errorMsg += '<br><br>本地环境提示：<br>1. 请确保后端服务已启动（cd backend && npm start）<br>2. 服务应运行在 http://localhost:3000';
-                    }
-                } else {
-                    errorMsg += '：' + error.message;
-                }
-                showError(errorMsg);
+                showError('加载课程失败，请检查后端服务是否运行');
             }
         }
 
@@ -593,22 +544,12 @@
         }
 
         function escapeHtml(str) {
-            if (!str) return '';
             return String(str)
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/\"/g, '&quot;')
                 .replace(/'/g, '&#039;');
-        }
-        
-        // 转义模板字符串中的特殊字符，防止代码片段显示在页面上
-        function escapeForTemplate(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/\\/g, '\\\\')
-                .replace(/`/g, '\\`')
-                .replace(/\${/g, '\\${');
         }
 
         // 提交并判题
@@ -657,31 +598,8 @@
             const images = level.images || [];
             const texts = level.texts || [];
             
-            // 构建图片URL：如果是相对路径，需要加上API基础URL
-            const getImageUrl = (imgPath) => {
-                if (!imgPath) return '';
-                // 如果已经是完整URL，直接返回
-                if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
-                    return imgPath;
-                }
-                // 如果是相对路径，构建完整URL
-                // Vercel环境需要通过API提供文件，本地环境可以直接访问
-                if (isLocal) {
-                    return `http://localhost:3000${imgPath}`;
-                } else {
-                    // Vercel环境：通过API提供文件
-                    // 将 /uploads/images/xxx.png 转换为 /api/uploads/images/xxx.png
-                    if (imgPath.startsWith('/uploads/')) {
-                        return `${API_BASE_URL}${imgPath}`;
-                    }
-                    // 如果路径不包含 /uploads/，添加它
-                    const cleanPath = imgPath.startsWith('/') ? imgPath : '/' + imgPath;
-                    return `${API_BASE_URL}/uploads/images${cleanPath}`;
-                }
-            };
-            
             let imagesHtml = images.map((img, index) => 
-                `<img src="${getImageUrl(img)}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}" onerror="this.style.display='none'; console.error('图片加载失败:', '${img}');">`
+                `<img src="${API_BASE_URL.replace('/api', '')}${img}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}">`
             ).join('');
             
             let indicatorsHtml = images.map((_, index) => 
@@ -715,33 +633,11 @@
 
         // 渲染视频关卡
         function renderVideoLevel(level) {
-            // 构建视频URL
-            const getVideoUrl = (videoPath) => {
-                if (!videoPath) return '';
-                // 如果已经是完整URL，直接返回
-                if (videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
-                    return videoPath;
-                }
-                // 如果是相对路径，构建完整URL
-                if (isLocal) {
-                    return `http://localhost:3000${videoPath}`;
-                } else {
-                    // Vercel环境：通过API提供文件
-                    // 将 /uploads/videos/xxx.mp4 转换为 /api/uploads/videos/xxx.mp4
-                    if (videoPath.startsWith('/uploads/')) {
-                        return `${API_BASE_URL}${videoPath}`;
-                    }
-                    // 如果路径不包含 /uploads/，添加它
-                    const cleanPath = videoPath.startsWith('/') ? videoPath : '/' + videoPath;
-                    return `${API_BASE_URL}/uploads/videos${cleanPath}`;
-                }
-            };
-            
-            const videoUrl = getVideoUrl(level.videoUrl);
+            const videoUrl = level.videoUrl ? `${API_BASE_URL.replace('/api', '')}${level.videoUrl}` : '';
             
             return `
                 <div class="level-container active">
-                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || '视频关卡')}</h2>
+                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || '视频关卡'}</h2>
                     <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
                     
                     <div class="video-container">
@@ -758,67 +654,22 @@
 
         // 渲染Canvas关卡
         async function renderCanvasLevel(level) {
-            // 方式0：已部署应用URL（React/Vite build等），优先 iframe 打开
-            if (level.appUrl && String(level.appUrl).trim()) {
-                const appUrl = String(level.appUrl).trim();
-                const iframeId = `iframe-${level.id}`;
-                return {
-                    html: `
-                        <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
-
-                            <div class="canvas-container" style="padding: 0; background: #000;">
-                                <div class="canvas-wrapper" style="padding: 0;">
-                                    <iframe
-                                        id="${iframeId}"
-                                        src="${appUrl}"
-                                        style="width: 100%; height: 650px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
-                                        allow="camera; microphone; autoplay"
-                                        allowfullscreen>
-                                    </iframe>
-                                </div>
-                            </div>
-                        </div>
-                    `,
-                    code: null
-                };
-            }
-
             let code = level.code || '';
             
             // 如果有代码URL，优先加载代码文件
             if (level.codeUrl) {
                 try {
-                    // 构建代码文件URL
-                    let codeUrl = level.codeUrl;
-                    if (codeUrl.startsWith('http://') || codeUrl.startsWith('https://')) {
-                        // 已经是完整URL，直接使用
-                    } else if (codeUrl.startsWith('/uploads/')) {
-                        // Vercel环境：通过API提供文件
-                        codeUrl = `${API_BASE_URL}${codeUrl}`;
-                    } else {
-                        // 相对路径
-                        if (isLocal) {
-                            codeUrl = `http://localhost:3000${codeUrl.startsWith('/') ? codeUrl : '/' + codeUrl}`;
-                        } else {
-                            // Vercel环境：假设是 /uploads/canvas/xxx.js 格式
-                            const cleanPath = codeUrl.startsWith('/') ? codeUrl : '/' + codeUrl;
-                            codeUrl = `${API_BASE_URL}/uploads/canvas${cleanPath}`;
-                        }
-                    }
-                    
-                    const codeRes = await fetch(codeUrl);
+                    const codeRes = await fetch(`${API_BASE_URL.replace('/api', '')}${level.codeUrl}`);
                     if (codeRes.ok) {
                         const loadedCode = await codeRes.text();
                         if (loadedCode && loadedCode.trim()) {
                             code = loadedCode;
                         }
                     } else {
-                        console.warn('加载代码文件失败，状态码:', codeRes.status, 'URL:', codeUrl);
+                        console.warn('加载代码文件失败，状态码:', codeRes.status);
                     }
                 } catch (error) {
-                    console.error('加载代码失败:', error, 'URL:', level.codeUrl);
+                    console.error('加载代码失败:', error);
                     // 如果加载失败，尝试使用level.code
                     if (!code && level.code) {
                         code = level.code;
@@ -832,8 +683,8 @@
                 return {
                     html: `
                         <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
                             <div class="error" style="text-align: center; padding: 40px;">
                                 <p>⚠️ Canvas关卡代码未找到或为空</p>
                                 <p style="margin-top: 10px; font-size: 14px; color: #666;">请检查关卡配置或重新上传代码</p>
@@ -850,56 +701,61 @@
                                    code.includes('<html') ||
                                    code.includes('<!DOCTYPE');
             
-            // 检测是否是React代码（包含import或JSX语法）
-            // 暂时禁用React实时渲染功能
-            const isReactCode = false; // 暂时禁用
-            // const isReactCode = code.includes('import ') || 
-            //                    code.includes('from ') ||
-            //                    (code.includes('<') && code.includes('/>')) ||
-            //                    code.includes('React.createElement') ||
-            //                    code.includes('useState') ||
-            //                    code.includes('useEffect');
-            
             const canvasId = `canvas-${level.id}`;
             const iframeId = `iframe-${level.id}`;
-            
-            // React实时渲染功能已暂时禁用
-            // 如果需要启用，请取消下面的注释并移除 if (false) 条件
             
             // 如果是HTML文档，使用iframe加载
             if (isHTMLDocument) {
                 console.log('检测到HTML文档，使用iframe加载');
+                // 创建Blob URL来加载HTML内容
                 const blob = new Blob([code], { type: 'text/html' });
                 const blobUrl = URL.createObjectURL(blob);
+                
                 return {
                     html: `
                         <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
+                                <p style="margin: 0 0 10px 0; font-weight: bold;">📷 摄像头权限提示</p>
+                                <p style="margin: 0; font-size: 13px;">此AR应用需要访问您的摄像头。当浏览器提示时，请点击"允许"。</p>
+                            </div>
                             
                             <div class="canvas-container" style="padding: 0; background: #000;">
                                 <div class="canvas-wrapper" style="padding: 0;">
                                     <iframe 
                                         id="${iframeId}" 
-                                        src="${blobUrl}" 
-                                        style="width: 100%; height: 650px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
+                                        src="${blobUrl}"
+                                        style="width: 100%; height: 600px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
                                         allow="camera; microphone; autoplay"
                                         allowfullscreen>
                                     </iframe>
                                 </div>
                             </div>
+                            
+                            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-top: 15px; color: #856404; font-size: 13px;">
+                                <p style="margin: 0 0 8px 0; font-weight: bold;">💡 如果摄像头无法启动，请尝试：</p>
+                                <ol style="margin: 0; padding-left: 20px; text-align: left;">
+                                    <li>检查浏览器地址栏左侧的锁图标或摄像头图标</li>
+                                    <li>点击图标，选择"允许"摄像头和麦克风权限</li>
+                                    <li>如果已经拒绝过，请刷新页面并重新授权</li>
+                                    <li>确保没有其他应用正在使用摄像头</li>
+                                </ol>
+                            </div>
                         </div>
                     `,
-                    code: null,
-                    blobUrl: blobUrl
+                    code: null, // HTML文档不需要执行代码
+                    blobUrl: blobUrl // 保存blob URL以便后续清理
                 };
             }
             
+            // 如果是纯JavaScript代码，使用canvas
             return {
                 html: `
                     <div class="level-container active">
-                        <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
-                        <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
+                        <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                        <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
                         
                         <div class="canvas-container">
                             <div class="canvas-wrapper">
@@ -948,40 +804,16 @@
         // 显示错误
         function showError(message) {
             const contentArea = document.getElementById('contentArea');
-            const hostname = window.location.hostname;
-            const isLocalEnv = (hostname === 'localhost' || hostname === '127.0.0.1') && 
-                              window.location.protocol !== 'file:';
-            
-            let errorTips = '';
-            if (isLocalEnv) {
-                errorTips = `
+            contentArea.innerHTML = `<div class="error">
+                <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
+                <p>${message}</p>
+                <p style="margin-top: 15px; font-size: 14px; color: #666;">
                     请确保：<br>
                     1. 后端服务已启动（cd backend && npm start）<br>
                     2. 服务运行在 http://localhost:3000<br>
                     3. 已在管理端创建了课程和关卡
-                `;
-            } else {
-                errorTips = `
-                    <strong>线上环境提示：</strong><br>
-                    1. 后端服务尚未部署或配置<br>
-                    2. 请部署后端服务到云平台（如 Vercel、Railway）<br>
-                    3. 部署后，修改前端代码中的 PRODUCTION_API_URL 为实际后端地址<br>
-                    4. 当前配置的后端地址：${API_BASE_URL}
-                `;
-            }
-            
-            // 使用 createElement 而不是 innerHTML，避免模板字符串问题
-            contentArea.innerHTML = '';
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error';
-            errorDiv.innerHTML = `
-                <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
-                <p>${escapeHtml(message)}</p>
-                <p style="margin-top: 15px; font-size: 14px; color: #666;">
-                    ${errorTips}
                 </p>
-            `;
-            contentArea.appendChild(errorDiv);
+            </div>`;
         }
 
         // 页面加载时初始化
