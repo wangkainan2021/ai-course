@@ -21,9 +21,14 @@ const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN ||
 const USE_BLOB_STORAGE = isVercel && BLOB_TOKEN;
 
 // 中间件
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // 静态文件服务
 if (!isVercel) {
