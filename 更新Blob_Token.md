@@ -39,7 +39,7 @@ vercel_blob_rw_HDli5TdWm5ZId6Fb_LXsIycDc2o1D2UU6v2KWubFO5AiNS2
 
 ```powershell
 # 1. 删除旧的环境变量（需要输入 y 确认）
-$env:VERCEL_TOKEN="vck_0wuYyGTJqUPOEohYa6USJzr3H00NZZF6LFYDq3UgdxKt4YM3cH2sl1uW"
+$env:VERCEL_TOKEN="你的Vercel_API_Token"
 npx vercel env rm BLOB_READ_WRITE_TOKEN production
 # 当提示时，输入：y
 

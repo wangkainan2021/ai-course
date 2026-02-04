@@ -36,7 +36,7 @@ vercel_blob_rw_HDli5TdWm5ZId6Fb_LXsIycDc2o1D2UU6v2KWubFO5AiNS2
 
 ```powershell
 # 设置 API Token
-$env:VERCEL_TOKEN="vck_0wuYyGTJqUPOEohYa6USJzr3H00NZZF6LFYDq3UgdxKt4YM3cH2sl1uW"
+$env:VERCEL_TOKEN="你的Vercel_API_Token"
 
 # 删除旧的环境变量（如果存在）
 npx vercel env rm BLOB_READ_WRITE_TOKEN production
@@ -61,7 +61,7 @@ npx vercel env add BLOB_READ_WRITE_TOKEN production
 2. **或使用 CLI**：
    ```powershell
    cd backend
-   $env:VERCEL_TOKEN="vck_0wuYyGTJqUPOEohYa6USJzr3H00NZZF6LFYDq3UgdxKt4YM3cH2sl1uW"
+   $env:VERCEL_TOKEN="你的Vercel_API_Token"
    npx vercel --prod
    ```
 

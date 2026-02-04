@@ -2,7 +2,7 @@
 
 ## 重要说明
 
-你提供的 API key (`vck_0wuYyGTJqUPOEohYa6USJzr3H00NZZF6LFYDq3UgdxKt4YM3cH2sl1uW`) 是 **Vercel API Token**，用于管理项目，但不是 Blob Storage 的访问令牌。
+你提供的 API key 是 **Vercel API Token**，用于管理项目，但不是 Blob Storage 的访问令牌。
 
 ## 必须完成的步骤
 
@@ -57,7 +57,7 @@
 
 ```powershell
 # 设置 Vercel API Token
-$env:VERCEL_TOKEN="vck_0wuYyGTJqUPOEohYa6USJzr3H00NZZF6LFYDq3UgdxKt4YM3cH2sl1uW"
+$env:VERCEL_TOKEN="你的Vercel_API_Token"
 
 # 进入 backend 目录
 cd backend
@@ -80,7 +80,7 @@ npx vercel env add BLOB_READ_WRITE_TOKEN production
 2. **或使用 CLI**：
    ```powershell
    cd backend
-   $env:VERCEL_TOKEN="vck_0wuYyGTJqUPOEohYa6USJzr3H00NZZF6LFYDq3UgdxKt4YM3cH2sl1uW"
+   $env:VERCEL_TOKEN="你的Vercel_API_Token"
    npx vercel --prod
    ```
 
