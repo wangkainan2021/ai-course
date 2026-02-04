@@ -587,12 +587,22 @@
         }
 
         function escapeHtml(str) {
+            if (!str) return '';
             return String(str)
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/\"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+        
+        // 转义模板字符串中的特殊字符，防止代码片段显示在页面上
+        function escapeForTemplate(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/`/g, '\\`')
+                .replace(/\${/g, '\\${');
         }
 
         // 提交并判题
@@ -641,8 +651,29 @@
             const images = level.images || [];
             const texts = level.texts || [];
             
+            // 构建图片URL：如果是相对路径，需要加上API基础URL
+            const getImageUrl = (imgPath) => {
+                if (!imgPath) return '';
+                // 如果已经是完整URL，直接返回
+                if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
+                    return imgPath;
+                }
+                // 如果是相对路径，构建完整URL
+                // Vercel环境需要通过API提供文件，本地环境可以直接访问
+                if (isLocal) {
+                    return `http://localhost:3000${imgPath}`;
+                } else {
+                    // Vercel环境：通过API提供文件
+                    // 将 /uploads/... 转换为 /api/uploads/...
+                    if (imgPath.startsWith('/uploads/')) {
+                        return `${API_BASE_URL}${imgPath.replace('/uploads', '/uploads')}`;
+                    }
+                    return `${API_BASE_URL.replace('/api', '')}${imgPath}`;
+                }
+            };
+            
             let imagesHtml = images.map((img, index) => 
-                `<img src="${API_BASE_URL.replace('/api', '')}${img}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}">`
+                `<img src="${getImageUrl(img)}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}" onerror="this.style.display='none'; console.error('图片加载失败:', '${img}');">`
             ).join('');
             
             let indicatorsHtml = images.map((_, index) => 
@@ -676,11 +707,31 @@
 
         // 渲染视频关卡
         function renderVideoLevel(level) {
-            const videoUrl = level.videoUrl ? `${API_BASE_URL.replace('/api', '')}${level.videoUrl}` : '';
+            // 构建视频URL
+            const getVideoUrl = (videoPath) => {
+                if (!videoPath) return '';
+                // 如果已经是完整URL，直接返回
+                if (videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+                    return videoPath;
+                }
+                // 如果是相对路径，构建完整URL
+                if (isLocal) {
+                    return `http://localhost:3000${videoPath}`;
+                } else {
+                    // Vercel环境：通过API提供文件
+                    // 将 /uploads/... 转换为 /api/uploads/...
+                    if (videoPath.startsWith('/uploads/')) {
+                        return `${API_BASE_URL}${videoPath.replace('/uploads', '/uploads')}`;
+                    }
+                    return `${API_BASE_URL.replace('/api', '')}${videoPath}`;
+                }
+            };
+            
+            const videoUrl = getVideoUrl(level.videoUrl);
             
             return `
                 <div class="level-container active">
-                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || '视频关卡'}</h2>
+                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || '视频关卡')}</h2>
                     <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
                     
                     <div class="video-container">
@@ -704,8 +755,8 @@
                 return {
                     html: `
                         <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
 
                             <div class="canvas-container" style="padding: 0; background: #000;">
                                 <div class="canvas-wrapper" style="padding: 0;">
@@ -729,17 +780,27 @@
             // 如果有代码URL，优先加载代码文件
             if (level.codeUrl) {
                 try {
-                    const codeRes = await fetch(`${API_BASE_URL.replace('/api', '')}${level.codeUrl}`);
+                    // 构建代码文件URL
+                    let codeUrl = level.codeUrl;
+                    if (codeUrl.startsWith('/uploads/')) {
+                        // Vercel环境：通过API提供文件
+                        codeUrl = `${API_BASE_URL}${codeUrl.replace('/uploads', '/uploads')}`;
+                    } else if (!codeUrl.startsWith('http://') && !codeUrl.startsWith('https://')) {
+                        // 相对路径
+                        codeUrl = isLocal ? `http://localhost:3000${codeUrl}` : `${API_BASE_URL.replace('/api', '')}${codeUrl}`;
+                    }
+                    
+                    const codeRes = await fetch(codeUrl);
                     if (codeRes.ok) {
                         const loadedCode = await codeRes.text();
                         if (loadedCode && loadedCode.trim()) {
                             code = loadedCode;
                         }
                     } else {
-                        console.warn('加载代码文件失败，状态码:', codeRes.status);
+                        console.warn('加载代码文件失败，状态码:', codeRes.status, 'URL:', codeUrl);
                     }
                 } catch (error) {
-                    console.error('加载代码失败:', error);
+                    console.error('加载代码失败:', error, 'URL:', level.codeUrl);
                     // 如果加载失败，尝试使用level.code
                     if (!code && level.code) {
                         code = level.code;
@@ -753,8 +814,8 @@
                 return {
                     html: `
                         <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
                             <div class="error" style="text-align: center; padding: 40px;">
                                 <p>⚠️ Canvas关卡代码未找到或为空</p>
                                 <p style="margin-top: 10px; font-size: 14px; color: #666;">请检查关卡配置或重新上传代码</p>
@@ -882,8 +943,8 @@
                 return {
                     html: `
                         <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
                             
                             <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
                                 <p style="margin: 0 0 10px 0; font-weight: bold;">⚡ 实时React渲染</p>
@@ -918,8 +979,8 @@
                 return {
                     html: `
                         <div class="level-container active">
-                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
-                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
                             
                             <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
                                 <p style="margin: 0 0 10px 0; font-weight: bold;">📷 摄像头权限提示</p>

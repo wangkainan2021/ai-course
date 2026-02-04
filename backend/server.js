@@ -697,6 +697,49 @@ app.delete('/api/levels/:id', (req, res) => {
   }
 });
 
+// 文件服务 API（用于 Vercel 环境）
+app.get('/api/uploads/*', (req, res) => {
+  try {
+    // 获取请求的文件路径（去掉 /api/uploads 前缀）
+    const filePath = req.path.replace('/api/uploads', '');
+    const fullPath = path.join(STORAGE_BASE, 'uploads', filePath);
+    
+    // 安全检查：确保文件在 uploads 目录内
+    const normalizedPath = path.normalize(fullPath);
+    const uploadsDir = path.join(STORAGE_BASE, 'uploads');
+    if (!normalizedPath.startsWith(uploadsDir)) {
+      return res.status(403).json({ success: false, message: '访问被拒绝' });
+    }
+    
+    // 检查文件是否存在
+    if (!fs.existsSync(normalizedPath)) {
+      return res.status(404).json({ success: false, message: '文件不存在' });
+    }
+    
+    // 根据文件类型设置 Content-Type
+    const ext = path.extname(normalizedPath).toLowerCase();
+    const contentTypeMap = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.js': 'application/javascript',
+      '.json': 'application/json',
+    };
+    const contentType = contentTypeMap[ext] || 'application/octet-stream';
+    
+    // 发送文件
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 缓存1年
+    res.sendFile(normalizedPath);
+  } catch (error) {
+    console.error('文件服务错误:', error);
+    res.status(500).json({ success: false, message: '文件服务错误: ' + error.message });
+  }
+});
+
 // 错误处理中间件
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
