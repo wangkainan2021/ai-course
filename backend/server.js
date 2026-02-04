@@ -131,12 +131,15 @@ async function uploadToBlob(file, fileType) {
     const blobPath = `uploads/${fileType}/${uniqueName}`;
     
     // 上传到 Blob Storage
-    // 使用 addRandomSuffix 作为双重保险，确保文件名唯一，避免冲突
+    // 使用 addRandomSuffix 和 allowOverwrite 确保上传成功
+    // addRandomSuffix: 自动添加随机后缀，避免文件名冲突
+    // allowOverwrite: 如果文件已存在，允许覆盖（作为备选方案）
     const blob = await put(blobPath, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
       token: BLOB_TOKEN,
-      addRandomSuffix: true
+      addRandomSuffix: true,
+      allowOverwrite: true
     });
     
     // 返回 Blob URL（可以直接访问）
