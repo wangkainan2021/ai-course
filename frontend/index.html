@@ -833,18 +833,20 @@
                                    code.includes('<!DOCTYPE');
             
             // 检测是否是React代码（包含import或JSX语法）
-            const isReactCode = code.includes('import ') || 
-                               code.includes('from ') ||
-                               (code.includes('<') && code.includes('/>')) ||
-                               code.includes('React.createElement') ||
-                               code.includes('useState') ||
-                               code.includes('useEffect');
+            // 暂时禁用React实时渲染功能
+            const isReactCode = false; // 暂时禁用
+            // const isReactCode = code.includes('import ') || 
+            //                    code.includes('from ') ||
+            //                    (code.includes('<') && code.includes('/>')) ||
+            //                    code.includes('React.createElement') ||
+            //                    code.includes('useState') ||
+            //                    code.includes('useEffect');
             
             const canvasId = `canvas-${level.id}`;
             const iframeId = `iframe-${level.id}`;
             
-            // 如果是React代码，使用Babel Standalone实时转译
-            if (isReactCode && !isHTMLDocument) {
+            // 如果是React代码，使用Babel Standalone实时转译（暂时禁用）
+            if (false && isReactCode && !isHTMLDocument) {
                 console.log('检测到React代码，使用Babel Standalone实时转译');
                 
                 // 使用字符串拼接，避免模板字符串嵌套问题
@@ -1016,11 +1018,40 @@
             }
             
             // 如果是纯JavaScript代码，使用canvas
+            // 如果是HTML文档，也使用iframe加载
+            if (isHTMLDocument) {
+                console.log('检测到HTML文档，使用iframe加载');
+                const blob = new Blob([code], { type: 'text/html' });
+                const blobUrl = URL.createObjectURL(blob);
+                return {
+                    html: `
+                        <div class="level-container active">
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
+                            
+                            <div class="canvas-container" style="padding: 0; background: #000;">
+                                <div class="canvas-wrapper" style="padding: 0;">
+                                    <iframe 
+                                        id="${iframeId}" 
+                                        src="${blobUrl}" 
+                                        style="width: 100%; height: 650px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
+                                        allow="camera; microphone; autoplay"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                    code: null,
+                    blobUrl: blobUrl
+                };
+            }
+            
             return {
                 html: `
                     <div class="level-container active">
-                        <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
-                        <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                        <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${escapeHtml(level.title || 'Canvas关卡')}</h2>
+                        <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${escapeHtml(level.description || '')}</p>
                         
                         <div class="canvas-container">
                             <div class="canvas-wrapper">
@@ -1069,9 +1100,9 @@
         // 显示错误
         function showError(message) {
             const contentArea = document.getElementById('contentArea');
-            const isLocalEnv = window.location.hostname === 'localhost' || 
-                              window.location.hostname === '127.0.0.1' ||
-                              window.location.hostname === '';
+            const hostname = window.location.hostname;
+            const isLocalEnv = (hostname === 'localhost' || hostname === '127.0.0.1') && 
+                              window.location.protocol !== 'file:';
             
             let errorTips = '';
             if (isLocalEnv) {
@@ -1091,13 +1122,18 @@
                 `;
             }
             
-            contentArea.innerHTML = `<div class="error">
+            // 使用 createElement 而不是 innerHTML，避免模板字符串问题
+            contentArea.innerHTML = '';
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.innerHTML = `
                 <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
-                <p>${message}</p>
+                <p>${escapeHtml(message)}</p>
                 <p style="margin-top: 15px; font-size: 14px; color: #666;">
                     ${errorTips}
                 </p>
-            </div>`;
+            `;
+            contentArea.appendChild(errorDiv);
         }
 
         // 页面加载时初始化
