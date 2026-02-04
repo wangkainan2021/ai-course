@@ -432,9 +432,9 @@ app.post('/api/courses', async (req, res) => {
 });
 
 // 更新课程
-app.put('/api/courses/:id', (req, res) => {
+app.put('/api/courses/:id', async (req, res) => {
   const { name, description, levelIds } = req.body;
-    const courses = await readCourses();
+  const courses = await readCourses();
   const index = courses.findIndex(c => c.id === req.params.id);
   
   if (index !== -1) {
@@ -553,32 +553,43 @@ app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
 });
 
 // 上传视频型关卡
+// 支持两种方式：
+// 1. 上传视频文件（multipart/form-data）
+// 2. 提供视频 URL（application/json 或 form-data 中的 videoUrl 字段）
 app.post('/api/levels/video', upload.single('video'), async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, videoUrl } = req.body;
     const levels = await readLevels();
     
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: '请上传视频文件' });
-    }
+    let finalVideoUrl = null;
     
-    // 检查文件大小（Vercel 有 4.5MB 请求体限制）
-    if (isVercel && req.file.size > 4 * 1024 * 1024) {
-      return res.status(413).json({ 
-        success: false, 
-        message: '视频文件太大（超过 4MB）。Vercel serverless function 有 4.5MB 请求体限制。建议：1. 压缩视频文件 2. 使用外部视频托管服务（如 YouTube、Bilibili）然后填写视频 URL' 
-      });
+    // 方式1：提供视频 URL（支持 B站、YouTube 等外链）
+    const trimmedVideoUrl = typeof videoUrl === 'string' ? videoUrl.trim() : '';
+    if (trimmedVideoUrl) {
+      finalVideoUrl = trimmedVideoUrl;
+    } 
+    // 方式2：上传视频文件
+    else if (req.file) {
+      // 检查文件大小（Vercel 有 4.5MB 请求体限制）
+      if (isVercel && req.file.size > 4 * 1024 * 1024) {
+        return res.status(413).json({ 
+          success: false, 
+          message: '视频文件太大（超过 4MB）。Vercel serverless function 有 4.5MB 请求体限制。建议：1. 压缩视频文件 2. 使用外部视频托管服务（如 YouTube、Bilibili）然后填写视频 URL' 
+        });
+      }
+      
+      // 上传到 Blob Storage 或使用本地路径
+      finalVideoUrl = await uploadToBlob(req.file, 'videos');
+    } else {
+      return res.status(400).json({ success: false, message: '请上传视频文件或填写视频 URL' });
     }
-    
-    // 上传到 Blob Storage 或使用本地路径
-    const videoUrl = await uploadToBlob(req.file, 'videos');
     
     const newLevel = {
       id: uuidv4(),
       type: 'video',
       title: title || '视频关卡',
       description: description || '',
-      videoUrl: videoUrl,
+      videoUrl: finalVideoUrl,
       createdAt: new Date().toISOString()
     };
     
@@ -682,7 +693,7 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
 // 支持两种方式：
 // 1) multipart/form-data 上传 quiz 文件字段名：quiz（.json）
 // 2) application/json 直接提交 { title, description, quiz: {...} } 或 { title, description, quizJson: "..." }
-app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
+app.post('/api/levels/quiz', upload.single('quiz'), async (req, res) => {
   try {
     const { title, description, quiz, quizJson } = req.body || {};
     const levels = await readLevels();
@@ -786,6 +797,30 @@ app.put('/api/levels/:id', upload.fields([{ name: 'images', maxCount: 10 }, { na
           level.texts.push('');
         }
         level.texts = level.texts.slice(0, level.images.length);
+      }
+    } else if (level.type === 'video') {
+      // 视频关卡：支持更新 videoUrl（支持 B站、YouTube 等外链）
+      const { videoUrl } = req.body;
+      if (videoUrl !== undefined) {
+        const trimmed = typeof videoUrl === 'string' ? videoUrl.trim() : '';
+        if (trimmed) {
+          // 如果之前是本地文件，删除旧文件
+          const oldVideoUrl = level.videoUrl;
+          if (oldVideoUrl && !oldVideoUrl.startsWith('http://') && !oldVideoUrl.startsWith('https://')) {
+            try {
+              const filePath = path.join(STORAGE_BASE, oldVideoUrl.replace(/^\//, ''));
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log('已删除旧视频文件:', oldVideoUrl);
+              }
+            } catch (error) {
+              console.error('删除旧视频文件失败:', error);
+            }
+          }
+          level.videoUrl = trimmed;
+        } else {
+          return res.status(400).json({ success: false, message: '视频 URL 不能为空' });
+        }
       }
     } else if (level.type === 'canvas') {
       // Canvas关卡：code 与 appUrl 可分别更新（允许同时更新）

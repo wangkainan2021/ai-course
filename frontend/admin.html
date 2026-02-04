@@ -523,12 +523,18 @@
                     <textarea name="description"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>上传视频</label>
+                    <label>视频 URL（推荐，支持 B站、YouTube 等外链）</label>
+                    <input type="text" name="videoUrl" placeholder="例如：https://www.bilibili.com/video/BVxxxxx 或 https://www.youtube.com/watch?v=xxxxx">
+                    <p style="font-size: 12px; color: #666; margin-top: 5px;">填写视频 URL 后，无需上传文件。支持 B站、YouTube 等视频平台。</p>
+                </div>
+                <div class="form-group">
+                    <label>或上传视频文件</label>
                     <div class="file-upload" onclick="document.getElementById('videoFile').click()">
                         <p>点击或拖拽视频到这里</p>
                         <input type="file" id="videoFile" name="video" accept="video/*" onchange="handleVideoFile(this.files)">
                     </div>
                     <div class="file-list" id="videoFileList"></div>
+                    <p style="font-size: 12px; color: #999; margin-top: 5px;">注意：文件大小限制 4MB（Vercel 限制）。大文件建议使用视频 URL。</p>
                 </div>
                 <button type="submit" class="btn btn-primary">上传视频关卡</button>
             </form>
@@ -943,8 +949,15 @@
             formData.append('title', e.target.title.value);
             formData.append('description', e.target.description.value);
             
-            if (selectedVideoFile) {
+            // 优先使用视频 URL
+            const videoUrl = e.target.videoUrl.value.trim();
+            if (videoUrl) {
+                formData.append('videoUrl', videoUrl);
+            } else if (selectedVideoFile) {
                 formData.append('video', selectedVideoFile);
+            } else {
+                showMessage('uploadMessage', '请填写视频 URL 或上传视频文件', false);
+                return;
             }
 
             try {
@@ -1741,16 +1754,73 @@
                             </div>
                         `;
                     } else if (level.type === 'video') {
-                        contentDiv.innerHTML = `
-                            <div class="form-group">
-                                <label>当前视频</label>
-                                ${level.videoUrl ? `
+                        // 判断是否是外部链接
+                        const isExternalUrl = level.videoUrl && (level.videoUrl.startsWith('http://') || level.videoUrl.startsWith('https://'));
+                        const isBilibili = level.videoUrl && level.videoUrl.includes('bilibili.com');
+                        const isYouTube = level.videoUrl && (level.videoUrl.includes('youtube.com') || level.videoUrl.includes('youtu.be'));
+                        
+                        let videoPreview = '';
+                        if (level.videoUrl) {
+                            if (isBilibili) {
+                                const bvidMatch = level.videoUrl.match(/BV[a-zA-Z0-9]+/);
+                                if (bvidMatch) {
+                                    const bvid = bvidMatch[0];
+                                    videoPreview = `
+                                        <iframe 
+                                            src="//player.bilibili.com/player.html?bvid=${bvid}&page=1&high_quality=1&autoplay=0" 
+                                            scrolling="no" 
+                                            border="0" 
+                                            frameborder="no" 
+                                            framespacing="0" 
+                                            allowfullscreen="true"
+                                            style="width: 100%; max-width: 600px; height: 400px; margin-top: 10px; border-radius: 8px;">
+                                        </iframe>
+                                    `;
+                                }
+                            } else if (isYouTube) {
+                                let videoId = '';
+                                const youtubeMatch = level.videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+                                if (youtubeMatch) {
+                                    videoId = youtubeMatch[1];
+                                }
+                                if (videoId) {
+                                    videoPreview = `
+                                        <iframe 
+                                            src="https://www.youtube.com/embed/${videoId}" 
+                                            frameborder="0" 
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                            allowfullscreen
+                                            style="width: 100%; max-width: 600px; height: 400px; margin-top: 10px; border-radius: 8px;">
+                                        </iframe>
+                                    `;
+                                }
+                            } else if (isExternalUrl) {
+                                videoPreview = `
+                                    <video controls style="width: 100%; max-width: 600px; margin-top: 10px; border-radius: 8px;">
+                                        <source src="${level.videoUrl}" type="video/mp4">
+                                    </video>
+                                `;
+                            } else {
+                                videoPreview = `
                                     <video controls style="width: 100%; max-width: 600px; margin-top: 10px; border-radius: 8px;">
                                         <source src="${API_BASE_URL.replace('/api', '')}${level.videoUrl}" type="video/mp4">
                                     </video>
-                                    <p style="font-size: 12px; color: #666; margin-top: 10px;">注意：编辑时无法修改视频，如需更换视频请删除后重新上传</p>
-                                ` : '<p style="color: #999;">未上传视频</p>'}
+                                `;
+                            }
+                        }
+                        
+                        contentDiv.innerHTML = `
+                            <div class="form-group">
+                                <label>视频 URL（支持 B站、YouTube 等外链）</label>
+                                <input type="text" id="editVideoUrl" placeholder="例如：https://www.bilibili.com/video/BVxxxxx" value="${(level.videoUrl || '').replace(/"/g, '&quot;')}">
+                                <p style="font-size: 12px; color: #666; margin-top: 5px;">支持 B站、YouTube 等视频平台的外链，或直接填写视频文件 URL。</p>
                             </div>
+                            ${level.videoUrl ? `
+                            <div class="form-group">
+                                <label>当前视频预览</label>
+                                ${videoPreview}
+                            </div>
+                            ` : ''}
                         `;
                     } else if (level.type === 'canvas') {
                         contentDiv.innerHTML = `
@@ -1986,6 +2056,14 @@
                     title: title,
                     description: description
                 };
+                
+                // 根据关卡类型添加特定字段
+                if (level.type === 'video') {
+                    const videoUrlInput = document.getElementById('editVideoUrl');
+                    if (videoUrlInput) {
+                        updateData.videoUrl = videoUrlInput.value.trim();
+                    }
+                }
                 
                 // 根据关卡类型处理特殊字段
                 if (level.type === 'image') {
