@@ -598,8 +598,27 @@
             const images = level.images || [];
             const texts = level.texts || [];
             
+            // 构建图片URL：如果是完整URL（Blob Storage），直接使用；否则拼接API地址
+            const getImageUrl = (imgPath) => {
+                if (!imgPath) return '';
+                // 如果已经是完整URL（http:// 或 https://），直接返回
+                if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
+                    return imgPath;
+                }
+                // 如果是相对路径，构建完整URL
+                if (isLocal) {
+                    return `http://localhost:3000${imgPath}`;
+                } else {
+                    // Vercel环境：如果是 /uploads/ 开头，通过API提供；否则可能是Blob URL
+                    if (imgPath.startsWith('/uploads/')) {
+                        return `${API_BASE_URL}${imgPath}`;
+                    }
+                    return `${API_BASE_URL.replace('/api', '')}${imgPath}`;
+                }
+            };
+            
             let imagesHtml = images.map((img, index) => 
-                `<img src="${API_BASE_URL.replace('/api', '')}${img}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}">`
+                `<img src="${getImageUrl(img)}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}" onerror="console.error('图片加载失败:', '${img}'); this.style.display='none';">`
             ).join('');
             
             let indicatorsHtml = images.map((_, index) => 
