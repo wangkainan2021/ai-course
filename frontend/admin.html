@@ -891,9 +891,14 @@
             formData.append('texts', JSON.stringify(texts));
 
             try {
-                console.log('开始上传图片关卡，图片数量:', imageItems.length);
+                console.log('=== 上传图片关卡 ===');
+                console.log('图片数量:', imageItems.length);
+                console.log('当前hostname:', window.location.hostname);
+                console.log('当前protocol:', window.location.protocol);
+                console.log('当前完整URL:', window.location.href);
+                console.log('isLocal判断:', isLocal);
                 console.log('API地址:', API_BASE_URL);
-                console.log('当前环境:', isLocal ? '本地' : '线上');
+                console.log('当前环境:', isLocal ? '本地开发' : '线上生产');
                 
                 const res = await fetch(`${API_BASE_URL}/levels/image`, {
                     method: 'POST',
