@@ -7,7 +7,10 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = 3000;
+
+// 检测运行环境
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
+const PORT = process.env.PORT || 3000;
 
 // 中间件
 app.use(cors());
@@ -15,17 +18,37 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // 静态文件服务
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/public', express.static(path.join(__dirname, 'public')));
+if (!isVercel) {
+  // 本地环境：直接提供静态文件
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  app.use('/public', express.static(path.join(__dirname, 'public')));
+} else {
+  // Vercel 环境：需要通过 API 路由提供文件（见 api/uploads.js）
+  // 这里暂时不设置静态文件服务，因为 Vercel 不支持
+}
+
+// 根据环境选择存储路径
+const getStoragePath = () => {
+  if (isVercel) {
+    // Vercel 环境：使用 /tmp 目录（临时存储，重启会丢失）
+    // 注意：Vercel 的文件系统是只读的，只有 /tmp 可写
+    return '/tmp';
+  } else {
+    // 本地环境：使用项目目录
+    return __dirname;
+  }
+};
+
+const STORAGE_BASE = getStoragePath();
 
 // 确保必要的目录存在
 const ensureDirectories = () => {
   const dirs = [
-    path.join(__dirname, 'uploads', 'images'),
-    path.join(__dirname, 'uploads', 'videos'),
-    path.join(__dirname, 'uploads', 'canvas'),
-    path.join(__dirname, 'uploads', 'quiz'),
-    path.join(__dirname, 'data')
+    path.join(STORAGE_BASE, 'uploads', 'images'),
+    path.join(STORAGE_BASE, 'uploads', 'videos'),
+    path.join(STORAGE_BASE, 'uploads', 'canvas'),
+    path.join(STORAGE_BASE, 'uploads', 'quiz'),
+    path.join(STORAGE_BASE, 'data')
   ];
   dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
@@ -42,13 +65,13 @@ const storage = multer.diskStorage({
     let uploadPath = '';
     // 支持 images（数组）和 image（单文件）两种字段名
     if (file.fieldname === 'images' || file.fieldname === 'image') {
-      uploadPath = path.join(__dirname, 'uploads', 'images');
+      uploadPath = path.join(STORAGE_BASE, 'uploads', 'images');
     } else if (file.fieldname === 'video') {
-      uploadPath = path.join(__dirname, 'uploads', 'videos');
+      uploadPath = path.join(STORAGE_BASE, 'uploads', 'videos');
     } else if (file.fieldname === 'canvas') {
-      uploadPath = path.join(__dirname, 'uploads', 'canvas');
+      uploadPath = path.join(STORAGE_BASE, 'uploads', 'canvas');
     } else if (file.fieldname === 'quiz') {
-      uploadPath = path.join(__dirname, 'uploads', 'quiz');
+      uploadPath = path.join(STORAGE_BASE, 'uploads', 'quiz');
     }
     cb(null, uploadPath);
   },
@@ -144,8 +167,8 @@ function normalizeQuizJson(inputQuiz) {
 }
 
 // 数据文件路径
-const COURSES_FILE = path.join(__dirname, 'data', 'courses.json');
-const LEVELS_FILE = path.join(__dirname, 'data', 'levels.json');
+const COURSES_FILE = path.join(STORAGE_BASE, 'data', 'courses.json');
+const LEVELS_FILE = path.join(STORAGE_BASE, 'data', 'levels.json');
 
 // 初始化数据文件
 const initDataFiles = () => {
@@ -404,7 +427,7 @@ app.post('/api/levels/canvas', upload.single('canvas'), (req, res) => {
     } else if (code) {
       // 如果没有上传文件，但有代码内容，保存为文件
       const codeFileName = `${uuidv4()}.js`;
-      const codePath = path.join(__dirname, 'uploads', 'canvas', codeFileName);
+      const codePath = path.join(STORAGE_BASE, 'uploads', 'canvas', codeFileName);
       fs.writeFileSync(codePath, code);
       codeUrl = `/uploads/canvas/${codeFileName}`;
     } else {
@@ -443,7 +466,7 @@ app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
     let quizObj = null;
 
     if (req.file) {
-      const filePath = path.join(__dirname, 'uploads', 'quiz', req.file.filename);
+      const filePath = path.join(STORAGE_BASE, 'uploads', 'quiz', req.file.filename);
       const raw = fs.readFileSync(filePath, 'utf8');
       quizObj = safeJsonParse(raw);
     } else if (quiz !== undefined) {
@@ -516,7 +539,7 @@ app.put('/api/levels/:id', (req, res) => {
         oldImages.forEach(oldImg => {
           if (!newImages.includes(oldImg)) {
             // 图片被删除了，删除文件
-            const filePath = path.join(__dirname, oldImg);
+            const filePath = path.join(STORAGE_BASE, oldImg.replace(/^\//, ''));
             if (fs.existsSync(filePath)) {
               try {
                 fs.unlinkSync(filePath);
@@ -540,21 +563,30 @@ app.put('/api/levels/:id', (req, res) => {
         }
         level.texts = level.texts.slice(0, level.images.length);
       }
-    } else if (level.type === 'canvas' && code !== undefined) {
-      level.code = code;
-      // 如果代码改变，更新代码文件
-      if (level.codeUrl) {
-        try {
-          const codePath = path.join(__dirname, level.codeUrl);
-          fs.writeFileSync(codePath, code);
-        } catch (error) {
-          console.error('更新代码文件失败:', error);
+    } else if (level.type === 'canvas') {
+      // Canvas关卡：code 与 appUrl 可分别更新（允许同时更新）
+      if (code !== undefined) {
+        level.code = code;
+        // 如果代码改变，更新代码文件
+        if (level.codeUrl) {
+          try {
+            const codePath = path.join(STORAGE_BASE, level.codeUrl.replace(/^\//, ''));
+            fs.writeFileSync(codePath, code);
+          } catch (error) {
+            console.error('更新代码文件失败:', error);
+          }
         }
       }
-    } else if (level.type === 'canvas' && appUrl !== undefined) {
-      // 切换为 iframe 应用模式
-      const trimmed = typeof appUrl === 'string' ? appUrl.trim() : '';
-      level.appUrl = trimmed;
+
+      if (appUrl !== undefined) {
+        const trimmed = typeof appUrl === 'string' ? appUrl.trim() : '';
+        if (trimmed) {
+          level.appUrl = trimmed;
+        } else {
+          // 允许清空 appUrl（回退到 code/html/js 模式）
+          delete level.appUrl;
+        }
+      }
     } else if (level.type === 'quiz' && quiz !== undefined) {
       let quizObj = null;
       try {
@@ -586,18 +618,18 @@ app.delete('/api/levels/:id', (req, res) => {
     // 删除关联的文件
     if (level.type === 'image' && level.images) {
       level.images.forEach(img => {
-        const filePath = path.join(__dirname, img);
+        const filePath = path.join(STORAGE_BASE, img.replace(/^\//, ''));
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
         }
       });
     } else if (level.type === 'video' && level.videoUrl) {
-      const filePath = path.join(__dirname, level.videoUrl);
+      const filePath = path.join(STORAGE_BASE, level.videoUrl.replace(/^\//, ''));
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
     } else if (level.type === 'canvas' && level.codeUrl) {
-      const filePath = path.join(__dirname, level.codeUrl);
+      const filePath = path.join(STORAGE_BASE, level.codeUrl.replace(/^\//, ''));
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -626,9 +658,16 @@ app.use((req, res) => {
   res.status(404).json({ success: false, message: '接口不存在' });
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`后端服务器运行在 http://localhost:${PORT}`);
-  console.log(`API文档: http://localhost:${PORT}/api`);
-  console.log('等待请求...');
-});
+// 导出 app 供 Vercel 使用
+module.exports = app;
+
+// 如果不是 Vercel 环境，启动本地服务器
+if (!isVercel) {
+  app.listen(PORT, () => {
+    console.log(`后端服务器运行在 http://localhost:${PORT}`);
+    console.log(`API文档: http://localhost:${PORT}/api`);
+    console.log('等待请求...');
+  });
+} else {
+  console.log('运行在 Vercel 环境，使用 serverless 模式');
+}
