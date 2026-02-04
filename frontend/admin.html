@@ -751,8 +751,8 @@
             document.getElementById(type + 'Form').style.display = 'block';
         }
 
-        // 处理单张图片上传
-        function handleSingleImage(files) {
+        // 处理单张图片上传（全局函数，供HTML内联调用）
+        window.handleSingleImage = function(files) {
             if (files.length === 0) return;
             
             const file = files[0];
@@ -1686,7 +1686,7 @@
                             <div class="form-group">
                                 <label>当前图片（点击删除按钮可删除图片）</label>
                                 <div id="editImageList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
-                                    ${(level.images || []).map((img, i) => {
+                                    ${(() => {
                                         // 构建图片URL：支持Blob Storage完整URL
                                         const getImageUrl = (imgPath) => {
                                             if (!imgPath) return '';
@@ -1702,10 +1702,11 @@
                                                 return `${API_BASE_URL.replace('/api', '')}${imgPath}`;
                                             }
                                         };
-                                        return `
+                                        return (level.images || []).map((img, i) => `
                                         <div id="edit-image-${i}" style="position: relative;" data-image-index="${i}">
                                             <img src="${getImageUrl(img)}" 
-                                                 style="width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 2px solid #ddd;">
+                                                 style="width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 2px solid #ddd;"
+                                                 onerror="console.error('图片加载失败:', '${img}'); this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect fill=\'%23ddd\' width=\'100\' height=\'100\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23999\'%3E图片加载失败%3C/text%3E%3C/svg%3E';">
                                             <button type="button" class="btn-delete-image" onclick="deleteImageFromLevel(${i})" 
                                                     style="position: absolute; top: 5px; right: 5px; width: 30px; height: 30px; border-radius: 50%; background: rgba(220, 38, 38, 0.9); color: white; border: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"
                                                     title="删除此图片">×</button>
@@ -1713,7 +1714,8 @@
                                                 图片 ${i + 1}
                                             </div>
                                         </div>
-                                    `).join('')}
+                                    `).join('');
+                                    })()}
                                 </div>
                                 <p style="font-size: 12px; color: #666; margin-top: 10px;">提示：删除图片后，对应的说明文字也会被删除</p>
                             </div>
