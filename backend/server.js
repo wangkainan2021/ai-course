@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { put, head } = require('@vercel/blob');
+const { put, head, get, del } = require('@vercel/blob');
 
 const app = express();
 
@@ -244,16 +244,16 @@ const initDataFiles = () => {
 initDataFiles();
 
 // 初始化数据 API（用于 Vercel 环境，从本地数据文件同步数据）
-app.post('/api/init-data', (req, res) => {
+app.post('/api/init-data', async (req, res) => {
   try {
     const { courses, levels } = req.body;
     
     if (courses && Array.isArray(courses)) {
-      fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2));
+      await writeCourses(courses);
     }
     
     if (levels && Array.isArray(levels)) {
-      fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels, null, 2));
+      await writeLevels(levels);
     }
     
     res.json({ 
@@ -297,45 +297,107 @@ app.get('/api', (req, res) => {
   });
 });
 
-// 读取数据
-const readCourses = () => {
+// 数据文件在 Blob Storage 中的路径
+const BLOB_COURSES_PATH = 'data/courses.json';
+const BLOB_LEVELS_PATH = 'data/levels.json';
+
+// 读取数据（支持 Blob Storage 和本地文件系统）
+const readCourses = async () => {
   try {
-    const data = fs.readFileSync(COURSES_FILE, 'utf8');
-    return JSON.parse(data);
+    if (USE_BLOB_STORAGE) {
+      // 从 Blob Storage 读取
+      try {
+        const blob = await get(BLOB_COURSES_PATH, { token: BLOB_TOKEN });
+        const data = await blob.text();
+        return JSON.parse(data);
+      } catch (error) {
+        // 如果文件不存在，返回空数组
+        if (error.statusCode === 404) {
+          return [];
+        }
+        console.error('从 Blob Storage 读取课程失败:', error);
+        return [];
+      }
+    } else {
+      // 从本地文件系统读取
+      const data = fs.readFileSync(COURSES_FILE, 'utf8');
+      return JSON.parse(data);
+    }
   } catch (error) {
+    console.error('读取课程失败:', error);
     return [];
   }
 };
 
-const readLevels = () => {
+const readLevels = async () => {
   try {
-    const data = fs.readFileSync(LEVELS_FILE, 'utf8');
-    return JSON.parse(data);
+    if (USE_BLOB_STORAGE) {
+      // 从 Blob Storage 读取
+      try {
+        const blob = await get(BLOB_LEVELS_PATH, { token: BLOB_TOKEN });
+        const data = await blob.text();
+        return JSON.parse(data);
+      } catch (error) {
+        // 如果文件不存在，返回空数组
+        if (error.statusCode === 404) {
+          return [];
+        }
+        console.error('从 Blob Storage 读取关卡失败:', error);
+        return [];
+      }
+    } else {
+      // 从本地文件系统读取
+      const data = fs.readFileSync(LEVELS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
   } catch (error) {
+    console.error('读取关卡失败:', error);
     return [];
   }
 };
 
-// 写入数据
-const writeCourses = (courses) => {
-  fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2));
+// 写入数据（支持 Blob Storage 和本地文件系统）
+const writeCourses = async (courses) => {
+  const data = JSON.stringify(courses, null, 2);
+  if (USE_BLOB_STORAGE) {
+    // 写入 Blob Storage
+    await put(BLOB_COURSES_PATH, data, {
+      access: 'public',
+      contentType: 'application/json',
+      token: BLOB_TOKEN
+    });
+  } else {
+    // 写入本地文件系统
+    fs.writeFileSync(COURSES_FILE, data);
+  }
 };
 
-const writeLevels = (levels) => {
-  fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels, null, 2));
+const writeLevels = async (levels) => {
+  const data = JSON.stringify(levels, null, 2);
+  if (USE_BLOB_STORAGE) {
+    // 写入 Blob Storage
+    await put(BLOB_LEVELS_PATH, data, {
+      access: 'public',
+      contentType: 'application/json',
+      token: BLOB_TOKEN
+    });
+  } else {
+    // 写入本地文件系统
+    fs.writeFileSync(LEVELS_FILE, data);
+  }
 };
 
 // ========== API 路由 ==========
 
 // 获取所有课程
-app.get('/api/courses', (req, res) => {
-  const courses = readCourses();
+app.get('/api/courses', async (req, res) => {
+  const courses = await readCourses();
   res.json({ success: true, data: courses });
 });
 
 // 获取单个课程详情
-app.get('/api/courses/:id', (req, res) => {
-  const courses = readCourses();
+app.get('/api/courses/:id', async (req, res) => {
+  const courses = await readCourses();
   const course = courses.find(c => c.id === req.params.id);
   if (course) {
     res.json({ success: true, data: course });
@@ -345,10 +407,10 @@ app.get('/api/courses/:id', (req, res) => {
 });
 
 // 创建课程
-app.post('/api/courses', (req, res) => {
+app.post('/api/courses', async (req, res) => {
   try {
     const { name, description, levelIds } = req.body;
-    const courses = readCourses();
+    const courses = await readCourses();
     
     const newCourse = {
       id: uuidv4(),
@@ -360,7 +422,7 @@ app.post('/api/courses', (req, res) => {
     };
     
     courses.push(newCourse);
-    writeCourses(courses);
+    await writeCourses(courses);
     
     res.json({ success: true, data: newCourse });
   } catch (error) {
@@ -372,7 +434,7 @@ app.post('/api/courses', (req, res) => {
 // 更新课程
 app.put('/api/courses/:id', (req, res) => {
   const { name, description, levelIds } = req.body;
-  const courses = readCourses();
+    const courses = await readCourses();
   const index = courses.findIndex(c => c.id === req.params.id);
   
   if (index !== -1) {
@@ -383,7 +445,7 @@ app.put('/api/courses/:id', (req, res) => {
       levelIds: levelIds || courses[index].levelIds,
       updatedAt: new Date().toISOString()
     };
-    writeCourses(courses);
+    await writeCourses(courses);
     res.json({ success: true, data: courses[index] });
   } else {
     res.status(404).json({ success: false, message: '课程不存在' });
@@ -391,22 +453,22 @@ app.put('/api/courses/:id', (req, res) => {
 });
 
 // 删除课程
-app.delete('/api/courses/:id', (req, res) => {
-  const courses = readCourses();
+app.delete('/api/courses/:id', async (req, res) => {
+  const courses = await readCourses();
   const filtered = courses.filter(c => c.id !== req.params.id);
-  writeCourses(filtered);
+  await writeCourses(filtered);
   res.json({ success: true, message: '课程已删除' });
 });
 
 // 获取所有关卡
-app.get('/api/levels', (req, res) => {
-  const levels = readLevels();
+app.get('/api/levels', async (req, res) => {
+  const levels = await readLevels();
   res.json({ success: true, data: levels });
 });
 
 // 获取单个关卡
-app.get('/api/levels/:id', (req, res) => {
-  const levels = readLevels();
+app.get('/api/levels/:id', async (req, res) => {
+  const levels = await readLevels();
   const level = levels.find(l => l.id === req.params.id);
   if (level) {
     res.json({ success: true, data: level });
@@ -444,7 +506,7 @@ app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 
 app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
   try {
     const { title, description, texts } = req.body;
-    const levels = readLevels();
+    const levels = await readLevels();
     
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: '请至少上传一张图片' });
@@ -481,7 +543,7 @@ app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
     };
     
     levels.push(newLevel);
-    writeLevels(levels);
+    await writeLevels(levels);
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
@@ -494,7 +556,7 @@ app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
 app.post('/api/levels/video', upload.single('video'), async (req, res) => {
   try {
     const { title, description } = req.body;
-    const levels = readLevels();
+    const levels = await readLevels();
     
     if (!req.file) {
       return res.status(400).json({ success: false, message: '请上传视频文件' });
@@ -521,7 +583,7 @@ app.post('/api/levels/video', upload.single('video'), async (req, res) => {
     };
     
     levels.push(newLevel);
-    writeLevels(levels);
+    await writeLevels(levels);
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
@@ -541,7 +603,7 @@ app.post('/api/levels/video', upload.single('video'), async (req, res) => {
 app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
   try {
     const { title, description, code, appUrl } = req.body;
-    const levels = readLevels();
+    const levels = await readLevels();
     
     // 方式0：提供已部署应用URL（例如 React/Vite build 后的页面），学生端用 iframe 打开
     const trimmedAppUrl = typeof appUrl === 'string' ? appUrl.trim() : '';
@@ -555,7 +617,7 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
         createdAt: new Date().toISOString()
       };
       levels.push(newLevel);
-      writeLevels(levels);
+      await writeLevels(levels);
       return res.json({ success: true, data: newLevel });
     }
 
@@ -607,7 +669,7 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
     };
     
     levels.push(newLevel);
-    writeLevels(levels);
+    await writeLevels(levels);
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
@@ -623,7 +685,7 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
 app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
   try {
     const { title, description, quiz, quizJson } = req.body || {};
-    const levels = readLevels();
+    const levels = await readLevels();
 
     let quizObj = null;
 
@@ -665,7 +727,7 @@ app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
     };
 
     levels.push(newLevel);
-    writeLevels(levels);
+    await writeLevels(levels);
     res.json({ success: true, data: newLevel });
   } catch (error) {
     console.error('上传选择题关卡错误:', error);
@@ -674,10 +736,10 @@ app.post('/api/levels/quiz', upload.single('quiz'), (req, res) => {
 });
 
 // 更新关卡
-app.put('/api/levels/:id', (req, res) => {
+app.put('/api/levels/:id', upload.fields([{ name: 'images', maxCount: 10 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
   try {
     const { title, description, texts, code, images, quiz, appUrl } = req.body;
-    const levels = readLevels();
+    const levels = await readLevels();
     const index = levels.findIndex(l => l.id === req.params.id);
     
     if (index === -1) {
@@ -763,7 +825,7 @@ app.put('/api/levels/:id', (req, res) => {
       level.quiz = normalizedQuiz;
     }
     
-    writeLevels(levels);
+    await writeLevels(levels);
     res.json({ success: true, data: level });
   } catch (error) {
     console.error('更新关卡错误:', error);
@@ -772,8 +834,8 @@ app.put('/api/levels/:id', (req, res) => {
 });
 
 // 删除关卡
-app.delete('/api/levels/:id', (req, res) => {
-  const levels = readLevels();
+app.delete('/api/levels/:id', async (req, res) => {
+  const levels = await readLevels();
   const level = levels.find(l => l.id === req.params.id);
   
   if (level) {
@@ -798,7 +860,7 @@ app.delete('/api/levels/:id', (req, res) => {
     }
     
     const filtered = levels.filter(l => l.id !== req.params.id);
-    writeLevels(filtered);
+    await writeLevels(filtered);
     res.json({ success: true, message: '关卡已删除' });
   } else {
     res.status(404).json({ success: false, message: '关卡不存在' });
