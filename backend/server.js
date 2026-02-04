@@ -20,6 +20,13 @@ const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN ||
                    process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
 const USE_BLOB_STORAGE = isVercel && BLOB_TOKEN;
 
+// 调试日志
+console.log('=== 环境检测 ===');
+console.log('isVercel:', isVercel);
+console.log('BLOB_TOKEN 存在:', !!BLOB_TOKEN);
+console.log('BLOB_TOKEN 前10字符:', BLOB_TOKEN ? BLOB_TOKEN.substring(0, 10) + '...' : '未设置');
+console.log('USE_BLOB_STORAGE:', USE_BLOB_STORAGE);
+
 // 中间件
 app.use(cors({
   origin: '*',
@@ -307,12 +314,16 @@ const readCourses = async () => {
     if (USE_BLOB_STORAGE) {
       // 从 Blob Storage 读取
       try {
+        console.log('从 Blob Storage 读取课程...');
         const blob = await get(BLOB_COURSES_PATH, { token: BLOB_TOKEN });
         const data = await blob.text();
-        return JSON.parse(data);
+        const courses = JSON.parse(data);
+        console.log('读取课程成功，数量:', courses.length);
+        return courses;
       } catch (error) {
         // 如果文件不存在，返回空数组
         if (error.statusCode === 404) {
+          console.log('课程文件不存在，返回空数组');
           return [];
         }
         console.error('从 Blob Storage 读取课程失败:', error);
@@ -320,8 +331,11 @@ const readCourses = async () => {
       }
     } else {
       // 从本地文件系统读取
+      console.log('从本地文件读取课程...');
       const data = fs.readFileSync(COURSES_FILE, 'utf8');
-      return JSON.parse(data);
+      const courses = JSON.parse(data);
+      console.log('读取课程成功，数量:', courses.length);
+      return courses;
     }
   } catch (error) {
     console.error('读取课程失败:', error);
@@ -334,21 +348,29 @@ const readLevels = async () => {
     if (USE_BLOB_STORAGE) {
       // 从 Blob Storage 读取
       try {
+        console.log('从 Blob Storage 读取关卡...');
         const blob = await get(BLOB_LEVELS_PATH, { token: BLOB_TOKEN });
         const data = await blob.text();
-        return JSON.parse(data);
+        const levels = JSON.parse(data);
+        console.log('读取关卡成功，数量:', levels.length);
+        return levels;
       } catch (error) {
         // 如果文件不存在，返回空数组
         if (error.statusCode === 404) {
+          console.log('关卡文件不存在，返回空数组');
           return [];
         }
         console.error('从 Blob Storage 读取关卡失败:', error);
+        console.error('错误详情:', error.message, error.statusCode);
         return [];
       }
     } else {
       // 从本地文件系统读取
+      console.log('从本地文件读取关卡...');
       const data = fs.readFileSync(LEVELS_FILE, 'utf8');
-      return JSON.parse(data);
+      const levels = JSON.parse(data);
+      console.log('读取关卡成功，数量:', levels.length);
+      return levels;
     }
   } catch (error) {
     console.error('读取关卡失败:', error);
@@ -361,13 +383,21 @@ const writeCourses = async (courses) => {
   const data = JSON.stringify(courses, null, 2);
   if (USE_BLOB_STORAGE) {
     // 写入 Blob Storage
-    await put(BLOB_COURSES_PATH, data, {
-      access: 'public',
-      contentType: 'application/json',
-      token: BLOB_TOKEN
-    });
+    try {
+      console.log('写入课程到 Blob Storage，数量:', courses.length);
+      const blob = await put(BLOB_COURSES_PATH, data, {
+        access: 'public',
+        contentType: 'application/json',
+        token: BLOB_TOKEN
+      });
+      console.log('课程写入成功，Blob URL:', blob.url);
+    } catch (error) {
+      console.error('写入课程到 Blob Storage 失败:', error);
+      throw error;
+    }
   } else {
     // 写入本地文件系统
+    console.log('写入课程到本地文件，数量:', courses.length);
     fs.writeFileSync(COURSES_FILE, data);
   }
 };
@@ -376,13 +406,21 @@ const writeLevels = async (levels) => {
   const data = JSON.stringify(levels, null, 2);
   if (USE_BLOB_STORAGE) {
     // 写入 Blob Storage
-    await put(BLOB_LEVELS_PATH, data, {
-      access: 'public',
-      contentType: 'application/json',
-      token: BLOB_TOKEN
-    });
+    try {
+      console.log('写入关卡到 Blob Storage，数量:', levels.length);
+      const blob = await put(BLOB_LEVELS_PATH, data, {
+        access: 'public',
+        contentType: 'application/json',
+        token: BLOB_TOKEN
+      });
+      console.log('关卡写入成功，Blob URL:', blob.url);
+    } catch (error) {
+      console.error('写入关卡到 Blob Storage 失败:', error);
+      throw error;
+    }
   } else {
     // 写入本地文件系统
+    console.log('写入关卡到本地文件，数量:', levels.length);
     fs.writeFileSync(LEVELS_FILE, data);
   }
 };
