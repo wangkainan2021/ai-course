@@ -787,7 +787,8 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
           const blob = await put(blobPath, Buffer.from(code, 'utf8'), {
             access: 'public',
             contentType: 'application/javascript',
-            token: BLOB_TOKEN
+            token: BLOB_TOKEN,
+            addRandomSuffix: true
           });
           codeUrl = blob.url;
         } catch (error) {
