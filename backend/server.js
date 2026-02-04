@@ -182,6 +182,31 @@ const initDataFiles = () => {
 
 initDataFiles();
 
+// 初始化数据 API（用于 Vercel 环境，从本地数据文件同步数据）
+app.post('/api/init-data', (req, res) => {
+  try {
+    const { courses, levels } = req.body;
+    
+    if (courses && Array.isArray(courses)) {
+      fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2));
+    }
+    
+    if (levels && Array.isArray(levels)) {
+      fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels, null, 2));
+    }
+    
+    res.json({ 
+      success: true, 
+      message: '数据初始化成功',
+      coursesCount: courses ? courses.length : 0,
+      levelsCount: levels ? levels.length : 0
+    });
+  } catch (error) {
+    console.error('初始化数据失败:', error);
+    res.status(500).json({ success: false, message: '初始化数据失败: ' + error.message });
+  }
+});
+
 // API 根路由 - 返回 API 信息
 app.get('/api', (req, res) => {
   res.json({

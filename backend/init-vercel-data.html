@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>初始化 Vercel 后端数据</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>初始化 Vercel 后端数据</h1>
+        <p>这个工具会将本地数据文件同步到 Vercel 后端。</p>
+        <p><strong>注意：</strong>由于 Vercel 的文件系统限制，数据存储在 /tmp 目录，重启后会丢失。</p>
+        
+        <button id="initBtn" onclick="initData()">初始化数据</button>
+        <button onclick="checkData()">检查数据</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://backend-topaz-zeta-46.vercel.app/api';
+        
+        // 本地数据（从 backend/data/ 目录读取）
+        const localCourses = [
+            {
+                "id": "fc430fe6-b7f0-43fb-9bbb-691a5f71eccc",
+                "name": "滤镜",
+                "description": "",
+                "levelIds": [
+                    "96e4fc17-0c20-4d6c-b6b5-652b595619b2",
+                    "1528ec0f-8321-4dc0-90c9-a5ca2101effd",
+                    "941d51c1-12c8-43b4-9fe0-888cdc96f688",
+                    "dd2025a8-4b60-4bed-9932-0e5d7d95b42d",
+                    "35aa2a65-c380-4545-b2dc-82547504ccab",
+                    "8b98a787-c81c-4f4a-ad40-56b5056fa4fc",
+                    "b1601b77-65d7-4536-a7fd-a3a40343d2e4",
+                    "1285d2c0-009b-4b3c-9ff8-37ec116ce728",
+                    "5de3e2f6-a8d7-4712-8b5c-02bb5b05f14f"
+                ],
+                "createdAt": "2026-02-04T04:25:16.136Z",
+                "updatedAt": "2026-02-04T08:00:53.300Z"
+            }
+        ];
+
+        // 注意：levels 数据太大，这里只显示部分
+        // 完整的 levels 数据需要从 backend/data/levels.json 读取
+        const localLevels = []; // 这里需要手动填入或通过文件读取
+
+        async function initData() {
+            const btn = document.getElementById('initBtn');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            btn.textContent = '正在初始化...';
+            result.style.display = 'none';
+
+            try {
+                // 首先需要读取完整的 levels 数据
+                // 由于浏览器安全限制，无法直接读取本地文件
+                // 需要手动复制 backend/data/levels.json 的内容
+                
+                showResult('info', '请先手动复制 backend/data/levels.json 的内容到 localLevels 变量中，然后重新运行。或者使用下面的方法：<br><br>1. 打开浏览器开发者工具（F12）<br>2. 在 Console 中运行：<br><code>fetch("' + API_URL + '/init-data", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({courses: [...], levels: [...]})})</code>');
+                
+                // 如果有完整数据，取消下面的注释
+                /*
+                const response = await fetch(`${API_URL}/init-data`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        courses: localCourses,
+                        levels: localLevels
+                    }),
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('success', `✅ 数据初始化成功！<br>课程数: ${data.coursesCount}<br>关卡数: ${data.levelsCount}`);
+                } else {
+                    showResult('error', '❌ 初始化失败: ' + data.message);
+                }
+                */
+            } catch (error) {
+                showResult('error', '❌ 错误: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '初始化数据';
+            }
+        }
+
+        async function checkData() {
+            const result = document.getElementById('result');
+            result.style.display = 'none';
+
+            try {
+                const coursesRes = await fetch(`${API_URL}/courses`);
+                const coursesData = await coursesRes.json();
+                
+                const levelsRes = await fetch(`${API_URL}/levels`);
+                const levelsData = await levelsRes.json();
+
+                if (coursesData.success && levelsData.success) {
+                    showResult('success', 
+                        `✅ 后端数据检查：<br>` +
+                        `课程数: ${coursesData.data.length}<br>` +
+                        `关卡数: ${levelsData.data.length}`
+                    );
+                } else {
+                    showResult('error', '❌ 检查失败');
+                }
+            } catch (error) {
+                showResult('error', '❌ 错误: ' + error.message);
+            }
+        }
+
+        function showResult(type, message) {
+            const result = document.getElementById('result');
+            result.className = type;
+            result.innerHTML = message;
+            result.style.display = 'block';
+        }
+
+        // 页面加载时自动检查
+        window.onload = checkData;
+    </script>
+</body>
+</html>
