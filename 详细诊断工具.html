@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>详细诊断工具</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-item {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+        }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .warning { background: #fff3cd; border-color: #ffc107; color: #856404; }
+        .info { background: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover { background: #5568d3; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .detail {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 详细诊断工具</h1>
+        <button onclick="runAllTests()">运行所有测试</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://backend-topaz-zeta-46.vercel.app/api';
+        const results = [];
+
+        async function testEndpoint(name, url, method = 'GET', body = null) {
+            const startTime = Date.now();
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(url, options);
+                const duration = Date.now() - startTime;
+                const contentType = response.headers.get('content-type');
+                
+                let data;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = await response.text();
+                }
+
+                return {
+                    name,
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    duration: `${duration}ms`,
+                    contentType,
+                    data,
+                    error: null
+                };
+            } catch (error) {
+                const duration = Date.now() - startTime;
+                return {
+                    name,
+                    success: false,
+                    status: null,
+                    statusText: null,
+                    duration: `${duration}ms`,
+                    contentType: null,
+                    data: null,
+                    error: {
+                        message: error.message,
+                        name: error.name,
+                        stack: error.stack
+                    }
+                };
+            }
+        }
+
+        async function runAllTests() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="test-item info">正在运行测试...</div>';
+
+            const tests = [
+                { name: 'API 根路径', url: `${API_URL}`, method: 'GET' },
+                { name: '课程列表', url: `${API_URL}/courses`, method: 'GET' },
+                { name: '关卡列表', url: `${API_URL}/levels`, method: 'GET' },
+            ];
+
+            const testResults = [];
+            for (const test of tests) {
+                const result = await testEndpoint(test.name, test.url, test.method);
+                testResults.push(result);
+                
+                // 实时显示结果
+                displayResults(testResults);
+                await new Promise(resolve => setTimeout(resolve, 500)); // 延迟以便观察
+            }
+
+            displayResults(testResults);
+        }
+
+        function displayResults(testResults) {
+            const resultsDiv = document.getElementById('results');
+            let html = '';
+
+            testResults.forEach(result => {
+                const statusClass = result.success ? 
+                    (result.data && result.data.success !== false ? 'success' : 'warning') : 
+                    'error';
+                
+                html += `<div class="test-item ${statusClass}">`;
+                html += `<strong>${result.name}</strong> `;
+                
+                if (result.success) {
+                    html += `✅ 成功 (${result.status} ${result.statusText}) - ${result.duration}`;
+                    if (result.data) {
+                        if (typeof result.data === 'object') {
+                            html += `<div class="detail">`;
+                            if (result.data.success !== undefined) {
+                                html += `成功: ${result.data.success}<br>`;
+                            }
+                            if (result.data.data !== undefined) {
+                                html += `数据数量: ${Array.isArray(result.data.data) ? result.data.data.length : 'N/A'}<br>`;
+                            }
+                            if (result.data.message) {
+                                html += `消息: ${result.data.message}<br>`;
+                            }
+                            html += `</div>`;
+                            html += `<pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+                        } else {
+                            html += `<pre>${result.data}</pre>`;
+                        }
+                    }
+                } else {
+                    html += `❌ 失败 - ${result.duration}`;
+                    if (result.status) {
+                        html += `<br>状态码: ${result.status} ${result.statusText}`;
+                    }
+                    if (result.error) {
+                        html += `<div class="detail">`;
+                        html += `<strong>错误类型:</strong> ${result.error.name}<br>`;
+                        html += `<strong>错误信息:</strong> ${result.error.message}<br>`;
+                        if (result.error.message.includes('Failed to fetch') || 
+                            result.error.message.includes('NetworkError')) {
+                            html += `<br><strong>可能的原因:</strong><br>`;
+                            html += `1. 网络连接问题<br>`;
+                            html += `2. CORS 跨域问题<br>`;
+                            html += `3. Vercel 服务暂时不可用<br>`;
+                            html += `4. 防火墙或代理阻止了请求`;
+                        }
+                        html += `</div>`;
+                        html += `<pre>${result.error.stack}</pre>`;
+                    }
+                }
+                html += `</div>`;
+            });
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // 页面加载时自动运行
+        window.onload = () => {
+            setTimeout(runAllTests, 500);
+        };
+    </script>
+</body>
+</html>

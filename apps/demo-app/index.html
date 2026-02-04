@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo AppUrl App</title>
+    <style>
+      body { margin: 0; font-family: Arial, "Microsoft YaHei", sans-serif; background:#111; color:#fff; }
+      .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
+      .card { background:#1f2937; border:1px solid #374151; border-radius: 12px; padding: 16px; }
+      button { background:#667eea; color:#fff; border:0; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; }
+      code { background:#000; padding:2px 6px; border-radius:6px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h2>iframe appUrl 本地验证页</h2>
+      <div class="card">
+        <p>如果你在学生端 Canvas 关卡里看到了这个页面，说明 <code>appUrl</code> 的 iframe 加载机制正常。</p>
+        <p>接下来你就可以把这里替换成你打包部署后的 React 应用地址。</p>
+        <button id="btn">点我测试交互</button>
+        <p id="out" style="margin-top:12px;color:#a7f3d0;"></p>
+      </div>
+    </div>
+    <script>
+      document.getElementById('btn').addEventListener('click', () => {
+        document.getElementById('out').textContent = '交互 OK：' + new Date().toLocaleString();
+      });
+    </script>
+  </body>
+</html>
+

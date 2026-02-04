@@ -27,8 +27,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+// 增加文件大小限制（视频文件可能很大）
+// 注意：Vercel serverless function 有 4.5MB 请求体限制，大文件需要使用 Blob Storage 直接上传
+app.use(bodyParser.json({ limit: '100mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
 
 // 静态文件服务
 if (!isVercel) {
@@ -97,7 +99,15 @@ const storage = USE_BLOB_STORAGE
       }
     });
 
-const upload = multer({ storage: storage });
+// 配置 multer，增加文件大小限制
+// 注意：Vercel 有 4.5MB 请求体限制，大文件需要使用 Blob Storage 直接上传
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB
+    fieldSize: 10 * 1024 * 1024  // 10MB for fields
+  }
+});
 
 // 上传文件到 Vercel Blob Storage 的辅助函数
 async function uploadToBlob(file, fileType) {
@@ -121,7 +131,16 @@ async function uploadToBlob(file, fileType) {
     return blob.url;
   } catch (error) {
     console.error('上传到 Blob Storage 失败:', error);
-    throw new Error('文件上传失败: ' + error.message);
+    // 如果 Blob Storage 失败（如 401），回退到本地存储
+    if (isVercel) {
+      // Vercel 环境下，如果 Blob Storage 失败，使用 /tmp 存储
+      const uniqueName = `${uuidv4()}-${file.originalname}`;
+      const filePath = path.join(STORAGE_BASE, 'uploads', fileType, uniqueName);
+      fs.writeFileSync(filePath, file.buffer);
+      return `/uploads/${fileType}/${uniqueName}`;
+    } else {
+      throw new Error('文件上传失败: ' + error.message);
+    }
   }
 }
 
@@ -481,6 +500,14 @@ app.post('/api/levels/video', upload.single('video'), async (req, res) => {
       return res.status(400).json({ success: false, message: '请上传视频文件' });
     }
     
+    // 检查文件大小（Vercel 有 4.5MB 请求体限制）
+    if (isVercel && req.file.size > 4 * 1024 * 1024) {
+      return res.status(413).json({ 
+        success: false, 
+        message: '视频文件太大（超过 4MB）。Vercel serverless function 有 4.5MB 请求体限制。建议：1. 压缩视频文件 2. 使用外部视频托管服务（如 YouTube、Bilibili）然后填写视频 URL' 
+      });
+    }
+    
     // 上传到 Blob Storage 或使用本地路径
     const videoUrl = await uploadToBlob(req.file, 'videos');
     
@@ -499,6 +526,13 @@ app.post('/api/levels/video', upload.single('video'), async (req, res) => {
     res.json({ success: true, data: newLevel });
   } catch (error) {
     console.error('上传视频关卡错误:', error);
+    // 如果是文件大小错误，返回更友好的提示
+    if (error.code === 'LIMIT_FILE_SIZE' || error.message.includes('too large')) {
+      return res.status(413).json({ 
+        success: false, 
+        message: '视频文件太大。建议：1. 压缩视频文件（推荐使用 H.264 编码）2. 使用外部视频托管服务（如 YouTube、Bilibili）然后填写视频 URL' 
+      });
+    }
     res.status(500).json({ success: false, message: '上传失败: ' + error.message });
   }
 });
@@ -533,15 +567,24 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
     } else if (code) {
       // 如果没有上传文件，但有代码内容，保存为文件
       if (USE_BLOB_STORAGE) {
-        // 上传到 Blob Storage
-        const codeFileName = `${uuidv4()}.js`;
-        const blobPath = `uploads/canvas/${codeFileName}`;
-        const blob = await put(blobPath, Buffer.from(code, 'utf8'), {
-          access: 'public',
-          contentType: 'application/javascript',
-          token: BLOB_TOKEN
-        });
-        codeUrl = blob.url;
+        try {
+          // 上传到 Blob Storage
+          const codeFileName = `${uuidv4()}.js`;
+          const blobPath = `uploads/canvas/${codeFileName}`;
+          const blob = await put(blobPath, Buffer.from(code, 'utf8'), {
+            access: 'public',
+            contentType: 'application/javascript',
+            token: BLOB_TOKEN
+          });
+          codeUrl = blob.url;
+        } catch (error) {
+          console.error('上传代码到 Blob Storage 失败:', error);
+          // 回退到本地存储
+          const codeFileName = `${uuidv4()}.js`;
+          const codePath = path.join(STORAGE_BASE, 'uploads', 'canvas', codeFileName);
+          fs.writeFileSync(codePath, code);
+          codeUrl = `/uploads/canvas/${codeFileName}`;
+        }
       } else {
         // 本地存储
         const codeFileName = `${uuidv4()}.js`;
