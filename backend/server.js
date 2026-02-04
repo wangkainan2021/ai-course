@@ -883,9 +883,12 @@ app.delete('/api/levels/:id', async (req, res) => {
         }
       });
     } else if (level.type === 'video' && level.videoUrl) {
-      const filePath = path.join(STORAGE_BASE, level.videoUrl.replace(/^\//, ''));
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+      // 只删除本地文件，不删除外部链接
+      if (!level.videoUrl.startsWith('http://') && !level.videoUrl.startsWith('https://')) {
+        const filePath = path.join(STORAGE_BASE, level.videoUrl.replace(/^\//, ''));
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
       }
     } else if (level.type === 'canvas' && level.codeUrl) {
       const filePath = path.join(STORAGE_BASE, level.codeUrl.replace(/^\//, ''));

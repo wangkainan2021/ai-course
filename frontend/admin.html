@@ -2099,6 +2099,16 @@
                     if (appUrlInput) {
                         updateData.appUrl = appUrlInput.value;
                     }
+                } else if (level.type === 'video') {
+                    const videoUrlInput = document.getElementById('editVideoUrl');
+                    if (videoUrlInput) {
+                        const videoUrl = videoUrlInput.value.trim();
+                        if (videoUrl) {
+                            updateData.videoUrl = videoUrl;
+                        } else {
+                            throw new Error('视频 URL 不能为空');
+                        }
+                    }
                 } else if (level.type === 'quiz') {
                     const quizTextarea = document.getElementById('editQuizJson');
                     if (quizTextarea) {
