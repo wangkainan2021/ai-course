@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI学习课程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', 'SimHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+
+        /* 步骤指示器 */
+        .steps-indicator {
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .step-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .step-item.completed {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
+
+        /* 内容区域 */
+        .content-area {
+            padding: 40px;
+            min-height: 500px;
+        }
+
+        .level-container {
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+
+        .level-container.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 图片关卡样式 */
+        .image-gallery {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+        }
+
+        .image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+
+        .gallery-image.active {
+            display: block;
+        }
+
+        .gallery-nav-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .gallery-nav-button.prev {
+            left: 20px;
+        }
+
+        .gallery-nav-button.next {
+            right: 20px;
+        }
+
+        .gallery-indicators {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .gallery-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ddd;
+            cursor: pointer;
+        }
+
+        .gallery-indicator.active {
+            background: #667eea;
+        }
+
+        /* 视频关卡样式 */
+        .video-container {
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            position: relative;
+            padding-top: 56.25%;
+        }
+
+        .video-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .video-wrapper video {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Canvas关卡样式 */
+        .canvas-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            min-height: 400px;
+        }
+
+        .canvas-wrapper {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* 文本说明区域 */
+        .text-area {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .text-area h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .text-content {
+            color: #555;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 60px 20px;
+            color: #c33;
+            background: #fee;
+            border-radius: 12px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .content-area {
+                padding: 20px;
+            }
+
+            .steps-indicator {
+                gap: 10px;
+            }
+
+            .step-item {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 步骤指示器 -->
+        <div class="steps-indicator" id="stepsIndicator">
+            <!-- 动态生成 -->
+        </div>
+
+        <!-- 内容区域 -->
+        <div class="content-area" id="contentArea">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000/api';
+        let currentCourse = null;
+        let currentLevelIndex = 0;
+        let currentImageIndex = 0;
+
+        // 初始化
+        async function init() {
+            try {
+                // 获取课程列表（这里简化处理，使用第一个课程）
+                const coursesRes = await fetch(`${API_BASE_URL}/courses`);
+                const coursesData = await coursesRes.json();
+                
+                if (coursesData.success && coursesData.data.length > 0) {
+                    currentCourse = coursesData.data[0];
+                    loadCourse(currentCourse);
+                } else {
+                    showError('暂无课程，请先创建课程');
+                }
+            } catch (error) {
+                console.error('加载失败:', error);
+                showError('加载课程失败，请检查后端服务是否运行');
+            }
+        }
+
+        // 加载课程
+        async function loadCourse(course) {
+            if (!course || !course.levelIds || course.levelIds.length === 0) {
+                showError('课程中没有关卡');
+                return;
+            }
+
+            // 生成步骤指示器
+            generateStepsIndicator(course.levelIds.length);
+
+            // 加载第一个关卡
+            await loadLevel(0);
+        }
+
+        // 生成步骤指示器
+        function generateStepsIndicator(count) {
+            const indicator = document.getElementById('stepsIndicator');
+            indicator.innerHTML = '';
+            
+            for (let i = 0; i < count; i++) {
+                const step = document.createElement('div');
+                step.className = 'step-item' + (i === 0 ? ' active' : '');
+                step.textContent = i + 1;
+                step.onclick = () => goToLevel(i);
+                indicator.appendChild(step);
+            }
+        }
+
+        // 跳转到指定关卡
+        async function goToLevel(index) {
+            if (!currentCourse || index < 0 || index >= currentCourse.levelIds.length) {
+                return;
+            }
+
+            currentLevelIndex = index;
+            await loadLevel(index);
+            
+            // 更新步骤指示器
+            document.querySelectorAll('.step-item').forEach((item, i) => {
+                item.classList.remove('active', 'completed');
+                if (i < index) {
+                    item.classList.add('completed');
+                } else if (i === index) {
+                    item.classList.add('active');
+                }
+            });
+        }
+
+        // 加载关卡
+        async function loadLevel(index) {
+            const levelId = currentCourse.levelIds[index];
+            
+            try {
+                const levelRes = await fetch(`${API_BASE_URL}/levels/${levelId}`);
+                const levelData = await levelRes.json();
+                
+                if (levelData.success) {
+                    renderLevel(levelData.data);
+                } else {
+                    showError('加载关卡失败');
+                }
+            } catch (error) {
+                console.error('加载关卡失败:', error);
+                showError('加载关卡失败');
+            }
+        }
+
+        // 渲染关卡
+        async function renderLevel(level) {
+            const contentArea = document.getElementById('contentArea');
+            
+            let html = '';
+            let canvasCode = null;
+            let blobUrl = null;
+            
+            if (level.type === 'image') {
+                html = renderImageLevel(level);
+            } else if (level.type === 'video') {
+                html = renderVideoLevel(level);
+            } else if (level.type === 'canvas') {
+                const result = await renderCanvasLevel(level);
+                html = result.html;
+                canvasCode = result.code;
+                blobUrl = result.blobUrl; // 保存blob URL以便后续清理
+            }
+            
+            contentArea.innerHTML = html;
+            
+            // 如果是Canvas关卡且是HTML文档（使用iframe），不需要执行代码
+            if (level.type === 'canvas' && blobUrl) {
+                // HTML文档已经在iframe中加载，不需要额外处理
+                console.log('HTML文档已在iframe中加载');
+                return;
+            }
+            
+            // 如果是Canvas关卡，执行代码
+            if (level.type === 'canvas' && canvasCode) {
+                const canvasId = `canvas-${level.id}`;
+                // 使用更可靠的方式等待canvas元素准备好
+                const executeCanvasCode = () => {
+                    const canvas = document.getElementById(canvasId);
+                    if (canvas) {
+                        try {
+                            const ctx = canvas.getContext('2d');
+                            
+                            // 清理代码：移除可能的BOM标记和多余的空白
+                            let cleanCode = canvasCode.trim();
+                            
+                            // 输出调试信息
+                            console.log('准备执行Canvas代码，代码长度:', cleanCode.length);
+                            console.log('代码前100字符:', cleanCode.substring(0, 100));
+                            
+                            // 使用字符串拼接而不是模板字符串，避免代码中的特殊字符导致语法错误
+                            // 将代码作为Function构造函数的最后一个参数（函数体）
+                            // 使用数组拼接来构建函数体字符串，避免模板字符串的问题
+                            const functionBodyParts = [
+                                'try {',
+                                cleanCode,
+                                '} catch (e) {',
+                                '    console.error(\'代码内部错误:\', e);',
+                                '    throw e;',
+                                '}'
+                            ];
+                            
+                            // 创建函数，canvas和ctx作为参数
+                            const scopeFunction = new Function('canvas', 'ctx', functionBodyParts.join('\n'));
+                            
+                            // 执行代码
+                            scopeFunction(canvas, ctx);
+                            
+                            console.log('Canvas代码执行成功');
+                        } catch (error) {
+                            console.error('Canvas代码执行错误:', error);
+                            console.error('错误名称:', error.name);
+                            console.error('错误消息:', error.message);
+                            console.error('错误堆栈:', error.stack);
+                            console.error('代码前200字符:', canvasCode.substring(0, 200));
+                            console.error('完整代码:', canvasCode);
+                            
+                            // 尝试显示更详细的错误信息
+                            try {
+                                const ctx = canvas.getContext('2d');
+                                ctx.fillStyle = '#f0f0f0';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                ctx.fillStyle = '#c33';
+                                ctx.font = '14px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                
+                                // 显示错误信息
+                                const errorMsg = error.name + ': ' + error.message;
+                                const errorLines = errorMsg.match(/.{1,50}/g) || [errorMsg];
+                                
+                                // 如果错误信息太长，只显示前几行
+                                const maxLines = 5;
+                                const displayLines = errorLines.slice(0, maxLines);
+                                
+                                displayLines.forEach((line, i) => {
+                                    ctx.fillText(line, canvas.width / 2, canvas.height / 2 - (displayLines.length - 1) * 12 + i * 24);
+                                });
+                                
+                                if (errorLines.length > maxLines) {
+                                    ctx.fillText('...', canvas.width / 2, canvas.height / 2 + (maxLines - 1) * 12 + 24);
+                                }
+                                
+                                // 显示提示信息
+                                ctx.fillStyle = '#666';
+                                ctx.font = '12px Arial';
+                                ctx.fillText('请查看浏览器控制台获取详细信息', canvas.width / 2, canvas.height / 2 + (maxLines + 1) * 12 + 24);
+                            } catch (renderError) {
+                                console.error('渲染错误信息失败:', renderError);
+                            }
+                        }
+                    } else {
+                        // 如果canvas还没准备好，再等一会儿
+                        setTimeout(executeCanvasCode, 50);
+                    }
+                };
+                
+                // 延迟执行，确保DOM已更新
+                setTimeout(executeCanvasCode, 200);
+            }
+            
+            // 如果是图片关卡，初始化图片切换功能
+            if (level.type === 'image' && level.images && level.images.length > 0) {
+                initImageGallery(level);
+            }
+        }
+
+        // 渲染图片关卡
+        function renderImageLevel(level) {
+            const images = level.images || [];
+            const texts = level.texts || [];
+            
+            let imagesHtml = images.map((img, index) => 
+                `<img src="${API_BASE_URL.replace('/api', '')}${img}" alt="图片${index + 1}" class="gallery-image ${index === 0 ? 'active' : ''}" data-index="${index}">`
+            ).join('');
+            
+            let indicatorsHtml = images.map((_, index) => 
+                `<div class="gallery-indicator ${index === 0 ? 'active' : ''}" onclick="goToImage(${index})"></div>`
+            ).join('');
+            
+            return `
+                <div class="level-container active">
+                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || '图片关卡'}</h2>
+                    <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                    
+                    <div class="image-gallery">
+                        <div class="image-wrapper">
+                            ${imagesHtml}
+                        </div>
+                        ${images.length > 1 ? `
+                            <button class="gallery-nav-button prev" onclick="previousImage()">‹</button>
+                            <button class="gallery-nav-button next" onclick="nextImage()">›</button>
+                        ` : ''}
+                    </div>
+                    
+                    ${images.length > 1 ? `<div class="gallery-indicators">${indicatorsHtml}</div>` : ''}
+                    
+                    <div class="text-area">
+                        <h3>图片说明</h3>
+                        <div class="text-content" id="imageText">${texts[0] || ''}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 渲染视频关卡
+        function renderVideoLevel(level) {
+            const videoUrl = level.videoUrl ? `${API_BASE_URL.replace('/api', '')}${level.videoUrl}` : '';
+            
+            return `
+                <div class="level-container active">
+                    <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || '视频关卡'}</h2>
+                    <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                    
+                    <div class="video-container">
+                        <div class="video-wrapper">
+                            <video controls>
+                                <source src="${videoUrl}" type="video/mp4">
+                                您的浏览器不支持视频播放
+                            </video>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 渲染Canvas关卡
+        async function renderCanvasLevel(level) {
+            let code = level.code || '';
+            
+            // 如果有代码URL，优先加载代码文件
+            if (level.codeUrl) {
+                try {
+                    const codeRes = await fetch(`${API_BASE_URL.replace('/api', '')}${level.codeUrl}`);
+                    if (codeRes.ok) {
+                        const loadedCode = await codeRes.text();
+                        if (loadedCode && loadedCode.trim()) {
+                            code = loadedCode;
+                        }
+                    } else {
+                        console.warn('加载代码文件失败，状态码:', codeRes.status);
+                    }
+                } catch (error) {
+                    console.error('加载代码失败:', error);
+                    // 如果加载失败，尝试使用level.code
+                    if (!code && level.code) {
+                        code = level.code;
+                    }
+                }
+            }
+            
+            // 如果还是没有代码，显示错误
+            if (!code || !code.trim()) {
+                console.error('Canvas关卡没有代码内容');
+                return {
+                    html: `
+                        <div class="level-container active">
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            <div class="error" style="text-align: center; padding: 40px;">
+                                <p>⚠️ Canvas关卡代码未找到或为空</p>
+                                <p style="margin-top: 10px; font-size: 14px; color: #666;">请检查关卡配置或重新上传代码</p>
+                            </div>
+                        </div>
+                    `,
+                    code: null
+                };
+            }
+            
+            // 检测代码是否是完整的HTML文档
+            const isHTMLDocument = code.trim().startsWith('<!DOCTYPE') || 
+                                   code.trim().startsWith('<html') || 
+                                   code.includes('<html') ||
+                                   code.includes('<!DOCTYPE');
+            
+            const canvasId = `canvas-${level.id}`;
+            const iframeId = `iframe-${level.id}`;
+            
+            // 如果是HTML文档，使用iframe加载
+            if (isHTMLDocument) {
+                console.log('检测到HTML文档，使用iframe加载');
+                // 创建Blob URL来加载HTML内容
+                const blob = new Blob([code], { type: 'text/html' });
+                const blobUrl = URL.createObjectURL(blob);
+                
+                return {
+                    html: `
+                        <div class="level-container active">
+                            <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                            <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                            
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: #1565c0; font-size: 14px;">
+                                <p style="margin: 0 0 10px 0; font-weight: bold;">📷 摄像头权限提示</p>
+                                <p style="margin: 0; font-size: 13px;">此AR应用需要访问您的摄像头。当浏览器提示时，请点击"允许"。</p>
+                            </div>
+                            
+                            <div class="canvas-container" style="padding: 0; background: #000;">
+                                <div class="canvas-wrapper" style="padding: 0;">
+                                    <iframe 
+                                        id="${iframeId}" 
+                                        src="${blobUrl}"
+                                        style="width: 100%; height: 600px; border: none; border-radius: 8px; display: block; margin: 0 auto;"
+                                        allow="camera; microphone; autoplay"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-top: 15px; color: #856404; font-size: 13px;">
+                                <p style="margin: 0 0 8px 0; font-weight: bold;">💡 如果摄像头无法启动，请尝试：</p>
+                                <ol style="margin: 0; padding-left: 20px; text-align: left;">
+                                    <li>检查浏览器地址栏左侧的锁图标或摄像头图标</li>
+                                    <li>点击图标，选择"允许"摄像头和麦克风权限</li>
+                                    <li>如果已经拒绝过，请刷新页面并重新授权</li>
+                                    <li>确保没有其他应用正在使用摄像头</li>
+                                </ol>
+                            </div>
+                        </div>
+                    `,
+                    code: null, // HTML文档不需要执行代码
+                    blobUrl: blobUrl // 保存blob URL以便后续清理
+                };
+            }
+            
+            // 如果是纯JavaScript代码，使用canvas
+            return {
+                html: `
+                    <div class="level-container active">
+                        <h2 class="section-title" style="text-align: center; margin-bottom: 20px; color: #333;">${level.title || 'Canvas关卡'}</h2>
+                        <p class="section-description" style="text-align: center; color: #666; margin-bottom: 30px;">${level.description || ''}</p>
+                        
+                        <div class="canvas-container">
+                            <div class="canvas-wrapper">
+                                <canvas id="${canvasId}" width="800" height="600" style="width: 100%; max-width: 800px; height: auto; border: 1px solid #ddd; border-radius: 8px; display: block; margin: 0 auto;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                code: code
+            };
+        }
+
+        // 图片切换功能
+        function initImageGallery(level) {
+            currentImageIndex = 0;
+            const images = level.images || [];
+            const texts = level.texts || [];
+            
+            window.goToImage = (index) => {
+                currentImageIndex = index;
+                document.querySelectorAll('.gallery-image').forEach((img, i) => {
+                    img.classList.toggle('active', i === index);
+                });
+                document.querySelectorAll('.gallery-indicator').forEach((ind, i) => {
+                    ind.classList.toggle('active', i === index);
+                });
+                const textEl = document.getElementById('imageText');
+                if (textEl) {
+                    textEl.textContent = texts[index] || '';
+                }
+            };
+            
+            window.previousImage = () => {
+                if (currentImageIndex > 0) {
+                    goToImage(currentImageIndex - 1);
+                }
+            };
+            
+            window.nextImage = () => {
+                if (currentImageIndex < images.length - 1) {
+                    goToImage(currentImageIndex + 1);
+                }
+            };
+        }
+
+        // 显示错误
+        function showError(message) {
+            const contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = `<div class="error">
+                <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
+                <p>${message}</p>
+                <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                    请确保：<br>
+                    1. 后端服务已启动（cd backend && npm start）<br>
+                    2. 服务运行在 http://localhost:3000<br>
+                    3. 已在管理端创建了课程和关卡
+                </p>
+            </div>`;
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

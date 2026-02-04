@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-item {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>系统测试页面</h1>
+    
+    <div class="test-item">
+        <h2>1. 测试后端连接</h2>
+        <button onclick="testBackend()">测试API连接</button>
+        <div id="backendResult"></div>
+    </div>
+    
+    <div class="test-item">
+        <h2>2. 测试获取课程</h2>
+        <button onclick="testCourses()">获取课程列表</button>
+        <div id="coursesResult"></div>
+    </div>
+    
+    <div class="test-item">
+        <h2>3. 测试获取关卡</h2>
+        <button onclick="testLevels()">获取关卡列表</button>
+        <div id="levelsResult"></div>
+    </div>
+    
+    <div class="test-item">
+        <h2>4. 快速链接</h2>
+        <a href="frontend/index.html" target="_blank">
+            <button>打开学生端</button>
+        </a>
+        <a href="frontend/admin.html" target="_blank">
+            <button>打开管理端</button>
+        </a>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        
+        async function testBackend() {
+            const result = document.getElementById('backendResult');
+            result.innerHTML = '测试中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/courses`);
+                const data = await response.json();
+                result.innerHTML = `<span class="success">✓ 后端连接成功！</span><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">✗ 后端连接失败：${error.message}</span><br>
+                    <p>请确保：</p>
+                    <ul>
+                        <li>后端服务已启动（cd backend && npm start）</li>
+                        <li>服务运行在 http://localhost:3000</li>
+                        <li>没有防火墙阻止连接</li>
+                    </ul>`;
+            }
+        }
+        
+        async function testCourses() {
+            const result = document.getElementById('coursesResult');
+            result.innerHTML = '加载中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/courses`);
+                const data = await response.json();
+                if (data.success) {
+                    result.innerHTML = `<span class="success">✓ 获取成功！共 ${data.data.length} 个课程</span>
+                        <pre>${JSON.stringify(data.data, null, 2)}</pre>`;
+                } else {
+                    result.innerHTML = `<span class="error">✗ ${data.message}</span>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">✗ 获取失败：${error.message}</span>`;
+            }
+        }
+        
+        async function testLevels() {
+            const result = document.getElementById('levelsResult');
+            result.innerHTML = '加载中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/levels`);
+                const data = await response.json();
+                if (data.success) {
+                    result.innerHTML = `<span class="success">✓ 获取成功！共 ${data.data.length} 个关卡</span>
+                        <pre>${JSON.stringify(data.data, null, 2)}</pre>`;
+                } else {
+                    result.innerHTML = `<span class="error">✗ ${data.message}</span>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">✗ 获取失败：${error.message}</span>`;
+            }
+        }
+        
+        // 页面加载时自动测试
+        window.addEventListener('load', () => {
+            setTimeout(testBackend, 1000);
+        });
+    </script>
+</body>
+</html>
