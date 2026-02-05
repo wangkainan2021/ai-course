@@ -461,14 +461,16 @@ const readLevels = async () => {
     if (USE_BLOB_STORAGE) {
       // 从 Blob Storage 读取
       try {
-        console.log('从 Blob Storage 读取关卡...');
+        console.log('[readLevels] 从 Blob Storage 读取关卡...');
         // 先使用 head 获取 blob 信息（包括 URL）
         const blobInfo = await head(BLOB_LEVELS_PATH, { token: BLOB_TOKEN });
+        console.log('[readLevels] Blob 信息:', { url: blobInfo.url, size: blobInfo.size });
         // 使用 fetch 从 URL 获取内容
         const response = await fetch(blobInfo.url);
         const data = await response.text();
         const levels = JSON.parse(data);
-        console.log('读取关卡成功，数量:', levels.length);
+        console.log('[readLevels] 读取关卡成功，数量:', levels.length);
+        console.log('[readLevels] 关卡列表:', levels.map(l => ({ id: l.id, type: l.type, title: l.title })));
         return levels;
       } catch (error) {
         // 如果文件不存在，返回空数组
@@ -524,21 +526,24 @@ const writeLevels = async (levels) => {
   if (USE_BLOB_STORAGE) {
     // 写入 Blob Storage
     try {
-      console.log('写入关卡到 Blob Storage，数量:', levels.length);
+      console.log('[writeLevels] 准备写入关卡到 Blob Storage，数量:', levels.length);
+      console.log('[writeLevels] 关卡ID列表:', levels.map(l => ({ id: l.id, type: l.type, title: l.title })));
       const blob = await put(BLOB_LEVELS_PATH, data, {
         access: 'public',
         contentType: 'application/json',
         token: BLOB_TOKEN,
         allowOverwrite: true  // 允许覆盖，因为这是同一个文件
       });
-      console.log('关卡写入成功，Blob URL:', blob.url);
+      console.log('[writeLevels] 关卡写入成功，Blob URL:', blob.url);
+      // 等待一小段时间，确保写入完成
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
-      console.error('写入关卡到 Blob Storage 失败:', error);
+      console.error('[writeLevels] 写入关卡到 Blob Storage 失败:', error);
       throw error;
     }
   } else {
     // 写入本地文件系统
-    console.log('写入关卡到本地文件，数量:', levels.length);
+    console.log('[writeLevels] 写入关卡到本地文件，数量:', levels.length);
     fs.writeFileSync(LEVELS_FILE, data);
   }
 };
@@ -768,12 +773,23 @@ app.post('/api/levels/video', upload.single('video'), async (req, res) => {
     
     levels.push(newLevel);
     console.log('[上传视频关卡] 准备写入，当前关卡数量:', levels.length);
+    console.log('[上传视频关卡] 新关卡信息:', { id: newLevel.id, type: newLevel.type, title: newLevel.title, videoUrl: newLevel.videoUrl });
     await writeLevels(levels);
     console.log('[上传视频关卡] 写入完成');
+    
+    // 等待一小段时间，确保 Blob Storage 写入完成
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // 验证写入
     const verify = await readLevels();
     console.log('[上传视频关卡] 验证读取，关卡数量:', verify.length);
+    console.log('[上传视频关卡] 验证读取的关卡列表:', verify.map(l => ({ id: l.id, type: l.type, title: l.title })));
+    const foundLevel = verify.find(l => l.id === newLevel.id);
+    if (foundLevel) {
+      console.log('[上传视频关卡] 验证成功，找到新创建的关卡');
+    } else {
+      console.warn('[上传视频关卡] 警告：验证时未找到新创建的关卡，可能读取到了旧数据');
+    }
     
     res.json({ success: true, data: newLevel });
   } catch (error) {
