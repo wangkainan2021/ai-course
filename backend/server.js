@@ -498,7 +498,8 @@ const writeCourses = async (courses) => {
       const blob = await put(BLOB_COURSES_PATH, data, {
         access: 'public',
         contentType: 'application/json',
-        token: BLOB_TOKEN
+        token: BLOB_TOKEN,
+        allowOverwrite: true  // 允许覆盖，因为这是同一个文件
       });
       console.log('课程写入成功，Blob URL:', blob.url);
     } catch (error) {
@@ -521,7 +522,8 @@ const writeLevels = async (levels) => {
       const blob = await put(BLOB_LEVELS_PATH, data, {
         access: 'public',
         contentType: 'application/json',
-        token: BLOB_TOKEN
+        token: BLOB_TOKEN,
+        allowOverwrite: true  // 允许覆盖，因为这是同一个文件
       });
       console.log('关卡写入成功，Blob URL:', blob.url);
     } catch (error) {
