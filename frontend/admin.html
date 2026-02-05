@@ -1085,14 +1085,98 @@
 
             const quizJsonText = (e.target.quizJson && e.target.quizJson.value) ? e.target.quizJson.value.trim() : '';
 
+            // 客户端验证
+            let quizObj = null;
             if (selectedQuizFile) {
-                formData.append('quiz', selectedQuizFile);
+                // 如果是文件，先读取并验证
+                try {
+                    const fileText = await selectedQuizFile.text();
+                    quizObj = JSON.parse(fileText);
+                } catch (error) {
+                    showMessage('uploadMessage', 'JSON文件格式错误：' + error.message, false);
+                    return;
+                }
             } else if (quizJsonText) {
-                // 直接提交json字符串（后端会解析校验）
-                formData.append('quizJson', quizJsonText);
+                // 如果是文本，先解析并验证
+                try {
+                    quizObj = JSON.parse(quizJsonText);
+                } catch (error) {
+                    showMessage('uploadMessage', 'JSON格式错误：' + error.message, false);
+                    return;
+                }
             } else {
                 showMessage('uploadMessage', '请粘贴选择题JSON或上传.json文件', false);
                 return;
+            }
+
+            // 验证JSON结构
+            if (!quizObj || typeof quizObj !== 'object') {
+                showMessage('uploadMessage', 'JSON格式错误：必须是一个对象', false);
+                return;
+            }
+
+            // 规范化JSON结构（兼容不同格式）
+            let normalizedQuiz = null;
+            if (Array.isArray(quizObj.questions)) {
+                normalizedQuiz = { questions: quizObj.questions };
+            } else if (Array.isArray(quizObj)) {
+                normalizedQuiz = { questions: quizObj };
+            } else {
+                showMessage('uploadMessage', 'JSON格式错误：必须包含 questions 数组', false);
+                return;
+            }
+
+            // 验证每个题目
+            const questions = normalizedQuiz.questions;
+            if (!Array.isArray(questions) || questions.length === 0) {
+                showMessage('uploadMessage', '至少需要1个题目', false);
+                return;
+            }
+
+            for (let i = 0; i < questions.length; i++) {
+                const q = questions[i];
+                if (!q || typeof q !== 'object') {
+                    showMessage('uploadMessage', `第${i + 1}题格式不正确`, false);
+                    return;
+                }
+                if (typeof q.prompt !== 'string' || !q.prompt.trim()) {
+                    showMessage('uploadMessage', `第${i + 1}题缺少题目内容（prompt）`, false);
+                    return;
+                }
+                if (!Array.isArray(q.options) || q.options.length < 2) {
+                    showMessage('uploadMessage', `第${i + 1}题至少需要2个选项`, false);
+                    return;
+                }
+                // 检查选项格式
+                for (let j = 0; j < q.options.length; j++) {
+                    const opt = q.options[j];
+                    if (!opt || typeof opt !== 'object') {
+                        showMessage('uploadMessage', `第${i + 1}题第${j + 1}个选项格式不正确`, false);
+                        return;
+                    }
+                    if (typeof opt.text !== 'string' || !opt.text.trim()) {
+                        showMessage('uploadMessage', `第${i + 1}题第${j + 1}个选项缺少文本（text）`, false);
+                        return;
+                    }
+                }
+                // 检查正确答案
+                const type = q.type || 'single';
+                const correctCount = q.options.filter(o => o && o.correct === true).length;
+                if (type === 'single' && correctCount !== 1) {
+                    showMessage('uploadMessage', `第${i + 1}题为单选题，必须且只能有1个正确答案`, false);
+                    return;
+                }
+                if (type === 'multi' && correctCount < 1) {
+                    showMessage('uploadMessage', `第${i + 1}题为多选题，至少需要1个正确答案`, false);
+                    return;
+                }
+            }
+
+            // 验证通过，提交数据
+            if (selectedQuizFile) {
+                formData.append('quiz', selectedQuizFile);
+            } else if (quizJsonText) {
+                formData.append('quizJson', quizJsonText);
             }
 
             try {
