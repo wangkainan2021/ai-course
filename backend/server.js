@@ -125,21 +125,26 @@ async function uploadToBlob(file, fileType) {
   
   try {
     // 生成更唯一的文件名：时间戳 + UUID + 随机数 + 原始文件名
+    // 使用更长的随机字符串和更精确的时间戳确保唯一性
     const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 15);
-    const uniqueName = `${timestamp}-${uuidv4()}-${random}-${file.originalname}`;
+    const random1 = Math.random().toString(36).substring(2, 15);
+    const random2 = Math.random().toString(36).substring(2, 15);
+    const uuid = uuidv4();
+    const originalExt = path.extname(file.originalname);
+    const originalBaseName = path.basename(file.originalname, originalExt);
+    const uniqueName = `${originalBaseName}-${timestamp}-${uuid}-${random1}-${random2}${originalExt}`;
     const blobPath = `uploads/${fileType}/${uniqueName}`;
     
     // 上传到 Blob Storage
     // 使用 addRandomSuffix 和 allowOverwrite 确保上传成功
-    // addRandomSuffix: 自动添加随机后缀，避免文件名冲突
+    // addRandomSuffix: 自动添加随机后缀，避免文件名冲突（双重保险）
     // allowOverwrite: 如果文件已存在，允许覆盖（作为备选方案）
     const blob = await put(blobPath, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
       token: BLOB_TOKEN,
-      addRandomSuffix: true,
-      allowOverwrite: true
+      addRandomSuffix: true,  // 即使文件名已唯一，也添加随机后缀
+      allowOverwrite: true    // 如果仍然冲突，允许覆盖
     });
     
     // 返回 Blob URL（可以直接访问）
