@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { put, head, get, del } = require('@vercel/blob');
+const { put, head, del } = require('@vercel/blob');
 
 const app = express();
 
@@ -425,14 +425,17 @@ const readCourses = async () => {
       // 从 Blob Storage 读取
       try {
         console.log('从 Blob Storage 读取课程...');
-        const blob = await get(BLOB_COURSES_PATH, { token: BLOB_TOKEN });
-        const data = await blob.text();
+        // 先使用 head 获取 blob 信息（包括 URL）
+        const blobInfo = await head(BLOB_COURSES_PATH, { token: BLOB_TOKEN });
+        // 使用 fetch 从 URL 获取内容
+        const response = await fetch(blobInfo.url);
+        const data = await response.text();
         const courses = JSON.parse(data);
         console.log('读取课程成功，数量:', courses.length);
         return courses;
       } catch (error) {
         // 如果文件不存在，返回空数组
-        if (error.statusCode === 404) {
+        if (error.statusCode === 404 || error.message?.includes('404')) {
           console.log('课程文件不存在，返回空数组');
           return [];
         }
@@ -459,14 +462,17 @@ const readLevels = async () => {
       // 从 Blob Storage 读取
       try {
         console.log('从 Blob Storage 读取关卡...');
-        const blob = await get(BLOB_LEVELS_PATH, { token: BLOB_TOKEN });
-        const data = await blob.text();
+        // 先使用 head 获取 blob 信息（包括 URL）
+        const blobInfo = await head(BLOB_LEVELS_PATH, { token: BLOB_TOKEN });
+        // 使用 fetch 从 URL 获取内容
+        const response = await fetch(blobInfo.url);
+        const data = await response.text();
         const levels = JSON.parse(data);
         console.log('读取关卡成功，数量:', levels.length);
         return levels;
       } catch (error) {
         // 如果文件不存在，返回空数组
-        if (error.statusCode === 404) {
+        if (error.statusCode === 404 || error.message?.includes('404')) {
           console.log('关卡文件不存在，返回空数组');
           return [];
         }
