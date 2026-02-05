@@ -136,15 +136,14 @@ async function uploadToBlob(file, fileType) {
     const blobPath = `uploads/${fileType}/${uniqueName}`;
     
     // 上传到 Blob Storage
-    // 使用 addRandomSuffix 和 allowOverwrite 确保上传成功
-    // addRandomSuffix: 自动添加随机后缀，避免文件名冲突（双重保险）
-    // allowOverwrite: 如果文件已存在，允许覆盖（作为备选方案）
+    // 使用 addRandomSuffix 确保文件名唯一，避免冲突
+    // 注意：根据 Vercel Blob 文档，addRandomSuffix 和 allowOverwrite 不能同时使用
+    // addRandomSuffix 会在文件名后自动添加随机后缀，确保每次上传都是唯一的
     const blob = await put(blobPath, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
       token: BLOB_TOKEN,
-      addRandomSuffix: true,  // 即使文件名已唯一，也添加随机后缀
-      allowOverwrite: true    // 如果仍然冲突，允许覆盖
+      addRandomSuffix: true  // 自动添加随机后缀，确保文件名唯一
     });
     
     // 返回 Blob URL（可以直接访问）
@@ -799,8 +798,7 @@ app.post('/api/levels/canvas', upload.single('canvas'), async (req, res) => {
             access: 'public',
             contentType: 'application/javascript',
             token: BLOB_TOKEN,
-            addRandomSuffix: true,
-            allowOverwrite: true
+            addRandomSuffix: true  // 自动添加随机后缀，确保文件名唯一
           });
           codeUrl = blob.url;
         } catch (error) {
