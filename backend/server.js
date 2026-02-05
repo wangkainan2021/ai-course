@@ -135,21 +135,38 @@ async function uploadToBlob(file, fileType) {
     const uniqueName = `${originalBaseName}-${timestamp}-${uuid}-${random1}-${random2}${originalExt}`;
     const blobPath = `uploads/${fileType}/${uniqueName}`;
     
+    console.log('[uploadToBlob] 准备上传文件:', {
+      originalName: file.originalname,
+      uniqueName: uniqueName,
+      blobPath: blobPath,
+      fileSize: file.buffer.length,
+      fileType: fileType
+    });
+    
     // 上传到 Blob Storage
-    // 使用 addRandomSuffix 确保文件名唯一，避免冲突
-    // 注意：根据 Vercel Blob 文档，addRandomSuffix 和 allowOverwrite 不能同时使用
-    // addRandomSuffix 会在文件名后自动添加随机后缀，确保每次上传都是唯一的
+    // 使用 allowOverwrite: true 允许覆盖（因为文件名已经足够唯一，冲突概率极低）
+    // 如果仍然冲突，允许覆盖可以避免错误
     const blob = await put(blobPath, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
       token: BLOB_TOKEN,
-      addRandomSuffix: true  // 自动添加随机后缀，确保文件名唯一
+      allowOverwrite: true  // 允许覆盖，因为文件名已经足够唯一
+    });
+    
+    console.log('[uploadToBlob] 上传成功:', {
+      blobUrl: blob.url,
+      blobPath: blob.pathname
     });
     
     // 返回 Blob URL（可以直接访问）
     return blob.url;
   } catch (error) {
-    console.error('上传到 Blob Storage 失败:', error);
+    const blobPathForError = typeof blobPath !== 'undefined' ? blobPath : 'unknown';
+    console.error('[uploadToBlob] 上传到 Blob Storage 失败:', {
+      error: error.message,
+      errorStack: error.stack,
+      blobPath: blobPathForError
+    });
     // 如果 Blob Storage 失败（如 401），回退到本地存储
     if (isVercel) {
       // Vercel 环境下，如果 Blob Storage 失败，使用 /tmp 存储
@@ -636,6 +653,12 @@ app.post('/api/levels/image/upload', upload.fields([{ name: 'images', maxCount: 
 // 上传图片型关卡
 app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
   try {
+    console.log('[上传图片关卡] 收到请求:', {
+      filesCount: req.files ? req.files.length : 0,
+      title: req.body.title,
+      useBlobStorage: USE_BLOB_STORAGE
+    });
+    
     const { title, description, texts } = req.body;
     const levels = await readLevels();
     
@@ -644,9 +667,14 @@ app.post('/api/levels/image', upload.array('images', 10), async (req, res) => {
     }
     
     // 上传到 Blob Storage 或使用本地路径
+    console.log('[上传图片关卡] 开始上传文件到 Blob Storage...');
     const imageUrls = await Promise.all(
-      req.files.map(file => uploadToBlob(file, 'images'))
+      req.files.map((file, index) => {
+        console.log(`[上传图片关卡] 上传文件 ${index + 1}/${req.files.length}:`, file.originalname);
+        return uploadToBlob(file, 'images');
+      })
     );
+    console.log('[上传图片关卡] 文件上传完成，URLs:', imageUrls);
     
     let textArray = [];
     
