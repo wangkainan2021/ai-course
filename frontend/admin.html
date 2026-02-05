@@ -1197,13 +1197,14 @@
                     data = { success: false, message: (text || '').slice(0, 200) };
                 }
 
-                if (!res.ok) {
+                if (!res.ok || !data.success) {
                     console.error('响应错误:', data);
-                    showMessage('uploadMessage', '上传失败：' + (data.message || ('服务器返回错误 ' + res.status)), false);
+                    const errorMsg = data.message || ('服务器返回错误 ' + res.status);
+                    showMessage('uploadMessage', '上传失败：' + errorMsg, false);
                     return;
                 }
 
-                showMessage('uploadMessage', data.success ? '选择题关卡上传成功！' : ('上传失败：' + data.message), data.success);
+                showMessage('uploadMessage', '选择题关卡上传成功！', true);
                 if (data.success) {
                     e.target.reset();
                     removeQuizFile();
