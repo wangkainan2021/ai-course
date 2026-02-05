@@ -224,38 +224,33 @@ function normalizeQuizJson(inputQuiz) {
     questions: inputQuiz.questions.map((q, idx) => {
       if (!q || typeof q !== 'object') return null;
 
-      // Detect B-format
-      const hasB = (q.question !== undefined) || (q.answerOptions !== undefined);
-      if (hasB) {
-        const optionsB = Array.isArray(q.answerOptions) ? q.answerOptions : [];
-        return {
-          questionNumber: q.questionNumber ?? (idx + 1),
-          prompt: String(q.question ?? '').trim(),
-          type: 'single', // 你的数据是单选；如需多选，可后续扩展字段
-          hint: q.hint ?? '',
-          options: optionsB.map(o => ({
-            text: (o && o.text) ? String(o.text) : '',
-            correct: !!(o && o.isCorrect),
-            rationale: (o && o.rationale) ? String(o.rationale) : ''
-          })),
-          // explanation 可留空；我们用 option.rationale 在前端逐项展示
-          explanation: q.explanation ?? ''
-        };
-      }
+      // 检测题目文本字段：prompt 或 question
+      const questionText = q.prompt || q.question;
+      
+      // 检测选项字段：options 或 answerOptions
+      const optionsArray = q.options || q.answerOptions || [];
+      
+      // 检测是否使用 isCorrect（而不是 correct）
+      const usesIsCorrect = optionsArray.length > 0 && 
+        optionsArray.some(o => o && typeof o === 'object' && ('isCorrect' in o || 'isCorrect' === undefined && !('correct' in o)));
 
-      // Assume A-format
-      const optionsA = Array.isArray(q.options) ? q.options : [];
+      // 转换选项格式
+      const normalizedOptions = Array.isArray(optionsArray) ? optionsArray.map(o => {
+        if (!o || typeof o !== 'object') return null;
+        return {
+          text: (o.text !== undefined) ? String(o.text) : '',
+          correct: usesIsCorrect ? !!(o.isCorrect) : !!(o.correct),
+          rationale: (o.rationale || o.reason) ? String(o.rationale || o.reason) : ''
+        };
+      }).filter(Boolean) : [];
+
       return {
         questionNumber: q.questionNumber ?? (idx + 1),
-        prompt: typeof q.prompt === 'string' ? q.prompt : String(q.prompt ?? ''),
+        prompt: questionText ? String(questionText).trim() : '',
         type: q.type || 'single',
         hint: q.hint ?? '',
         explanation: q.explanation ?? '',
-        options: optionsA.map(o => ({
-          text: (o && o.text) ? String(o.text) : '',
-          correct: !!(o && o.correct),
-          rationale: (o && o.rationale) ? String(o.rationale) : ''
-        }))
+        options: normalizedOptions
       };
     }).filter(Boolean)
   };
