@@ -295,11 +295,34 @@
         // 初始化
         async function init() {
             try {
-                // 获取课程列表（这里简化处理，使用第一个课程）
-                const coursesRes = await fetch(`${API_BASE_URL}/courses`);
-                const coursesData = await coursesRes.json();
+                console.log('开始加载课程列表，API地址:', API_BASE_URL);
                 
-                if (coursesData.success && coursesData.data.length > 0) {
+                // 添加超时处理（30秒）
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                
+                // 获取课程列表（这里简化处理，使用第一个课程）
+                const coursesRes = await fetch(`${API_BASE_URL}/courses`, {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                console.log('API响应状态:', coursesRes.status, coursesRes.statusText);
+                
+                if (!coursesRes.ok) {
+                    const errorText = await coursesRes.text();
+                    console.error('API返回错误:', coursesRes.status, errorText);
+                    throw new Error(`服务器返回错误 ${coursesRes.status}: ${errorText.substring(0, 100)}`);
+                }
+                
+                const coursesData = await coursesRes.json();
+                console.log('课程数据:', coursesData);
+                
+                if (coursesData.success && coursesData.data && coursesData.data.length > 0) {
                     currentCourse = coursesData.data[0];
                     loadCourse(currentCourse);
                 } else {
@@ -307,7 +330,17 @@
                 }
             } catch (error) {
                 console.error('加载失败:', error);
-                showError('加载课程失败，请检查后端服务是否运行');
+                let errorMessage = '加载课程失败';
+                
+                if (error.name === 'AbortError') {
+                    errorMessage = '请求超时，可能是网络问题或后端服务无法访问。请检查：<br>1. 网络连接是否正常<br>2. 后端服务是否正常运行<br>3. API地址是否正确：' + API_BASE_URL;
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMessage = '无法连接到后端服务。可能的原因：<br>1. 网络连接问题<br>2. 后端服务未启动或无法访问<br>3. CORS 跨域问题<br>4. API地址：' + API_BASE_URL;
+                } else {
+                    errorMessage = '加载课程失败：' + error.message;
+                }
+                
+                showError(errorMessage);
             }
         }
 
@@ -901,15 +934,26 @@
         // 显示错误
         function showError(message) {
             const contentArea = document.getElementById('contentArea');
+            const isProduction = !isLocal;
             contentArea.innerHTML = `<div class="error">
                 <h3 style="margin-bottom: 10px;">⚠️ 错误</h3>
-                <p>${message}</p>
+                <div style="line-height: 1.8;">${message}</div>
+                ${isProduction ? `
                 <p style="margin-top: 15px; font-size: 14px; color: #666;">
-                    请确保：<br>
+                    <strong>线上环境提示：</strong><br>
+                    1. 后端服务地址：${API_BASE_URL}<br>
+                    2. 如果持续无法加载，可能是网络问题或后端服务暂时不可用<br>
+                    3. 请尝试刷新页面或稍后再试<br>
+                    4. 如果问题持续，请联系管理员检查后端服务状态
+                </p>
+                ` : `
+                <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                    <strong>本地开发提示：</strong><br>
                     1. 后端服务已启动（cd backend && npm start）<br>
                     2. 服务运行在 http://localhost:3000<br>
                     3. 已在管理端创建了课程和关卡
                 </p>
+                `}
             </div>`;
         }
 
